@@ -1,0 +1,67 @@
+/* autoconf/config.hin.  Generated automatically from configure.in by autoheader 2.13.  */
+/***************************************************************************
+ * autoconfig/acconfig.h                                                   *
+ *  - is the template file for autoconfig/config.hin which is generated    *
+ *    by the autoheader command                                            *
+ *                                                                         *
+ * autoconfig/config.hin                                                   *
+ *  - is the template for include/config.h, that will be gererated by      *
+ *    the ./configure script                                               *
+ *                                                                         *
+ * include/config.h                                                        *
+ *  - is the file that has the definitions/options for the pre-processor   *
+ *                                                                         *
+ ***************************************************************************/
+
+/* Define to empty if the keyword does not work.  */
+#undef const
+
+/* Define to `int' if <sys/types.h> doesn't define.  */
+#undef gid_t
+
+/* Define if you have <sys/wait.h> that is POSIX.1 compatible.  */
+#undef HAVE_SYS_WAIT_H
+
+/* Define if you need to in order for stat and other things to work.  */
+#undef _POSIX_SOURCE
+
+/* Define if you have the ANSI C header files.  */
+#undef STDC_HEADERS
+
+/* Define if you can safely include both <sys/time.h> and <time.h>.  */
+#undef TIME_WITH_SYS_TIME
+
+/* Define if your <sys/time.h> declares struct tm.  */
+#undef TM_IN_SYS_TIME
+
+/* Define to `int' if <sys/types.h> doesn't define.  */
+#undef uid_t
+
+/* Define if you have the gettimeofday function.  */
+#undef HAVE_GETTIMEOFDAY
+
+/* Define if you have the munlockall function.  */
+#undef HAVE_MUNLOCKALL
+
+/* Define if you have the select function.  */
+#undef HAVE_SELECT
+
+/* Define if you have the sigaction function.  */
+#undef HAVE_SIGACTION
+
+/* Define if you have the strerror function.  */
+#undef HAVE_STRERROR
+
+/* Define if you have the <signal.h> header file.  */
+#undef HAVE_SIGNAL_H
+
+/* Define if you have the <sys/time.h> header file.  */
+#undef HAVE_SYS_TIME_H
+
+/* Define if you have the <unistd.h> header file.  */
+#undef HAVE_UNISTD_H
+
+/* Amount of DEBUGGING output */
+#undef DEBUG
+
+/* End of file */
