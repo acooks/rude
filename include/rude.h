@@ -33,7 +33,7 @@
 #define PMAXSIZE 32768  /* Maximum accepted UDP-data field/packet size      */
 #define MINDURAT 0.001  /* Minimum allowed flow duration in seconds (float) */
 
-#define VERSION "0.62"
+#define VERSION "0.70"
 
 /*
  * Enumeration definition for different (known) flow types
