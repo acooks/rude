@@ -1,0 +1,197 @@
+RUDE - version 0.60
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+From Jargon File (4.0.0/24 July 1996) [jargon]:
+
+  rude [WPI] /adj./
+
+	1. (of a program) Badly written.
+
+	2. Functionally poor, e.g., a program that is very difficult to
+	   use because of gratuitously poor (random?) design decisions.
+	   Oppose {cuspy}.
+
+	3. Anything that manipulates a shared resource without regard for
+	   its other users in such a way as to cause a (non-fatal) problem.
+	   Examples: programs that change tty modes without resetting them
+	   on exit, or windowing programs that keep forcing themselves to
+	   the top of the window stack.  Compare {all-elbows}.
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+Commandline syntax:
+
+ rude [ -h | -v | -s <script file> ] [ -p <priority level ]
+
+
+	-h			Print short help.
+
+	-v			Print version information
+
+	-s <script file>	Use this option to point out the correct
+				script file that describes the flows. This
+				option is compulsory if you want to generate
+				traffic.
+
+	-P <priority>		Set the process real-time priority.
+				Only root can do that. Be carefull -
+				this might lock up your computer !!!
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+Configuration file:
+
+ Every configuration file should contain at least three (3) commands:
+ the START, one flow ON and one flow OFF command. If that requirement is
+ not met or the parser can not recognize all the given commands in the file,
+ the configuration file will be considered corrupted and the program will
+ exit without any further action.
+
+ Lines starting with '#' or empty lines are treated as comments (i.e. are
+ not processed). Configuration file can hold any number of comment lines
+ anywhere in the file.
+
+ The START command must be the 1st command in the configuration file.
+ It may be preceded with comment lines, but nothing else. If your config
+ file has more than one (1) START command, the parsing will fail and the
+ program will exit with error.
+
+ Configuration file should hold at least two commands for each flow:
+ the ON and OFF commands. Between the ON and OFF commands can be
+ random/any number of MODIFY commands, which alter the flow behaviour.
+ Note that MODIFY commands are not available for every flow type.
+
+ Commands for each flow must be ordered according to the time - i.e.
+ the ON command must be the 1st command for the specific flow and the
+ MODIFY commands must be ordered by the time-field. The OFF command
+ must be the last command for the flow. The commands for each flow can
+ be "mixed" or each flow can have their configuration on different segment
+ in the file.
+
+ See also the well-commented configuration file "example.cfg".
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+ START <time>
+ 
+   o <time> = { NOW | HH:MM:SS }
+     - HH = { 0,...,23 } , MM = { 0,...,59 } , SS = { 0,...,59 }
+     - This must be the 1st action line in the configuration file. The <time>
+       can be respresented as a symbolic value "NOW" or an absolute time with
+       the universal 24h notation "hours:minutes:seconds".
+     - Only/exactly one START command is required/expected.
+     - Parser tests only 9 characters, so little typos do not affect. In
+       other words "START NOW\n" = OK and "START NOW \n" = OK and
+       "START NOWADAYS" = OK ;)
+
+------------------------------------------------------------------------------
+
+ <stime> <id> ON <sport> <dst.add>:<dst.port> <type> [type parameters]
+
+   o <stime> = { integer }
+     - Relative time (in milliseconds) to the START TIME when the
+       flow <id> should be activated (i.e. value 1000 = 1 second).
+       Must be > 0.
+   o <id>    = { integer } - Unique identifier for this flow.
+   o <sport> = { integer } - Source UDP port for this flow. Must be > 1024.
+   o <dst.add> = { string }
+     - Destination addres either in dotted decimal notation or DNS name.
+       Must be followed with colon ':' and the destination port number.
+   o <dst.port> = { integer } - Destination UDP port.
+   o <type> = { string }
+     - Flow type. Can be one of the following with type specific parameters:
+
+
+     * CONSTANT <rate> <psize>
+     o <rate>  = { integer } - packets per second. Must be >= 0. If the rate
+                               is equal to zero (rate = 0) the flow will be
+			       silent (= not transmitting) during this
+                               timeslot.
+     o <psize> = { integer } - packet size. This sets the size of the UDP
+                               data field. It must be between 20 and 32768
+			       bytes. The actual transmitted packet size
+			       depends on the used network interface
+                               encapsulation. For example Ethernet packet
+			       size can be calculated with the following
+			       formula (UDP packet size = 1000 bytes):
+
+				<data> + <UDP> + <IP> + <ETH> = <TOTAL>
+				 1000  +   8   +  20  +   18  = 1046 bytes
+			       
+
+     * TRACE <trace_file>
+     o <trace_file> = [path +] filename to the trace file
+
+------------------------------------------------------------------------------
+
+ TOS <id> <value>
+
+   * This optional command allows for the setting of the TOS byte of the
+     IP header. Some values may only be used by root. If rude fails to
+     set the specified TOS it uses the default instead.
+
+------------------------------------------------------------------------------
+
+ <mtime> <id> MODIFY <type> [type parameters]
+
+   * This command is valid only for the following flow type(s):
+	- CONSTANT
+
+   o <mtime> = { integer } - relative time from START to this action
+   o <id>    = { integer } - flow identifier
+   o <type>  = { string }  - flow type with parameters (see ON command)
+
+------------------------------------------------------------------------------
+
+ <otime> <id> OFF
+
+   o <otime> = { integer } - relative time from START to this command
+   o <id>    = { integer } - flow identifier
+
+------------------------------------------------------------------------------
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+Available flow types:
+
+
+ * CONSTANT
+
+   This flow simulates stream that looks like constant bitrate traffic.
+   You may change the flow parameters (packet size and packet rate) with
+   the MODIFY command. If the generated stream is not "stable" enough, you
+   should try to run the rude in priviledged priority (-p option).
+
+
+ * TRACE
+
+   This flow simulates pre-defined traffic. The trace of the traffic is
+   given on separate text file which must look like this (2 columns,
+   where the 1st column describes the packet size and the 2nd column time
+   to wait for the _next_ transmission):
+
+512 0.040
+255 1.1
+762 0.000001
+
+   Maximum line length (terminated with '\n') is set to 255 characters,
+   including the terminating newline-character. !!! THERE IS NO NEED TO
+   EXCEED THIS, SO BE CAREFUL WHEN CREATING YOUR OWN TRACE FILES !!!
+
+   The first column sets the size of data field in UDP packet. The second
+   column is interpreted as a floating point value, which tells us the
+   time to wait until the next packet/line can be processed. The "maximum"
+   resolution to the time value is 1 microsecond (= 6 digits after the
+   comma), although it is very unlikely that the kernel/this program can
+   process the packets with so high resolution...
+
+   If the TRACE flow is configured to STOP before all packets from the
+   trace file can be processed, no harm is done - "unprocessed" packets
+   won't be sent. On the other hand, if you configure the flow to
+   last longer than the trace file describes, rude will start from the
+   beginning (i.e. loops until STOPped).
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_

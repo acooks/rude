@@ -1,0 +1,74 @@
+CRUDE - version 0.60
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+From Webster's Revised Unabridged Dictionary (1913) [web1913]:
+
+  Crude \Crude\ (kr[udd]d), a.
+
+     Unripe; not mature or perfect; immature.
+  
+           I come to pluck your berries harsh and crude.
+                                                    --Milton.
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+    CRUDE is the receiver and logging utility for flows that are generated
+    with the RUDE tool. In the default operation mode CRUDE prints the
+    information to standard output, so you'll have to redirect it to
+    file if you like to process it later on.
+
+    Our recommendation is to log the data into file with the '-l' option.
+    This reduces I/O operations because the data is logged in binary
+    format and soforth improves performance. You can decode the file
+    later on with the option '-d'.
+
+
+    BUGs and feature wishes should be reported into one of the following
+    E-mail addresses:
+
+		james@cs.tut.fi
+		sambo@cc.tut.fi
+                rprior@inescporto.pt
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+Commandline syntax:
+
+ crude [ -h | -v | -d <file> | [-p <port>] [-i <add>] [-l <file>] [-n #] ]
+
+	-h			Print short help.
+
+	-v			Print version information
+
+	-d <file>		Use this option to decode the binary
+				formatted file which was generated from
+				the capture with the '-l' option.
+
+	-p <port>		Set the UDP port to listen to. The
+				default port is 10001.
+
+	-i <add>		Set the physical interface to listen
+				from. The <add> argument is the IP
+				addres for the specific interface in
+				numerical dotted notation (a.b.c.d).
+				If this is not set, the program will
+				use the INADDR_ANY address :)
+
+	-l <file>		Log the results into file <file> in
+				binary format. The default behaviour is
+				to print out the decoded info to stdout.
+
+	-n #			Set the number of packets to capture. The
+				default vaulue is 0, which means until
+				interrupted with CTRL+C.
+
+         -s #[,#...]             Instead of logging results to a file
+                                 calculate some statistics on-the-fly.
+ 
+         -P <priority>           Set the process real-time priority.
+                                 Only root can do that. Be carefull -
+                                 this might lock up your computer !!!
+  
+
+-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_

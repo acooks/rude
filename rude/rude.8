@@ -1,0 +1,114 @@
+.TH RUDE 8
+.SH NAME
+rude \- real-time UDP data emitter
+.SH SYNOPSIS
+.B rude
+.B -s 
+.I file 
+.B [ -h ] [ -v ]
+.B [ -P
+.I 0-90 
+.B ]
+
+.SH DESCRIPTION
+.IB Rude 
+sends UDP data into network as configured in the script 
+.IB file.
+Currently 
+.IB CONSTANT 
+bitrate and 
+.IB TRACE 
+type of flows are supported. The 
+.IB CONSTANT 
+bitrate is specified by configuring the packet size 
+(UDP data size in bytes) and rate (packets per second). The 
+.IB TRACE 
+type of flow configuration is given as a separate text file, which can be 
+generated from e.g. a 
+.B tcpdump(8) 
+trace. It consists of two columns where the first column describes the packet 
+size and the second column time to wait before the next transmission.
+.PP
+
+.SH OPTIONS
+.IP \fB\-s
+The script 
+.IB file 
+describing the flows to be sent by the rude program. 
+See ../rude/DOC/example.cfg, for an example. 
+.IP \fB\-h 
+Print a short help.
+.IP \fB\-v
+Print the version information. 
+.IP \fB\-P
+Set the process in real-time round-robin scheduling with the given 
+.IB priority\fP. 
+Needs root permission. Use with care.
+
+
+.SH CONFIGURATION FILE
+
+Every configuration file should contain at least three (3) commands:
+the 
+.IB START
+, one flow 
+.IB ON 
+and one flow 
+.IB OFF 
+command. If that requirement is not met or the parser can not recognize all 
+the given commands in the file, the configuration file will be considered 
+corrupted and the program will exit without any further action.
+
+Lines starting with '#' or empty lines are treated as comments (i.e. are
+not processed). Configuration file can hold any number of comment lines
+anywhere in the file.
+
+The 
+.IB START 
+command must be the 1st command in the configuration file.
+It may be preceded with comment lines, but nothing else. If your config
+file has more than one (1) 
+.IB START 
+command, the parsing will fail and the
+program will exit with error.
+
+Configuration file should hold at least two commands for each flow:
+the 
+.IB ON 
+and 
+.IB OFF 
+commands. Between the 
+.IB ON 
+and 
+.IB OFF 
+commands can be random/any number of 
+.IB MODIFY 
+commands, which alter the flow behaviour.
+Note that 
+.IB MODIFY 
+commands are not available for every flow type.
+
+Commands for each flow must be ordered according to the time - i.e.
+the 
+.IB ON 
+command must be the 1st command for the specific flow and the
+.IB MODIFY 
+commands must be ordered by the time-field. The 
+.IB OFF 
+command must be the last command for the flow. The commands for each flow can
+be "mixed" or each flow can have their configuration on different segment
+in the file. See ../rude/DOC/README.rude for detailed information
+on the configuration file.
+
+.SH TODO
+Support more flow types.
+
+.SH BUGS
+I hear them crawling in my head.
+.PP
+Please report any other bugs to the authors.
+.SH AUTHORS
+Juha Laine, TUT <james@cs.tut.fi> and Sampo Saaristo, TUT <sambo@cs.tut.fi> and Rui Prior, <rprior@inescporto.pt>
+.SH "SEE ALSO"
+crude(8)
+.\"{{{}}}

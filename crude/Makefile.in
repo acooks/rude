@@ -1,0 +1,56 @@
+# $Id$
+#
+# Makefile.in for CRUDE
+#
+# Authors: Juha Laine     <james@cs.tut.fi>
+#	   Sampo Saaristo <sambo@cc.tut.fi>
+#
+# Copyright (C) 1999 Juha Laine, Tampere, Finland
+#                    All rights reserved
+#
+##############################################################################
+SHELL = /bin/sh
+
+prefix        = @prefix@
+exec_prefix   = @exec_prefix@
+
+bindir        = @bindir@
+mandir        = @mandir@/man8
+sbindir       = @sbindir@
+srcdir        = @srcdir@
+
+INSTALL  = @INSTALL@ -o root -g root -m 0755
+VPATH    = @srcdir@
+
+CC       = @CC@
+CFLAGS   = @CFLAGS@
+LDFLAGS  = @LDFLAGS@
+DEFS     = @DEFS@
+LIBS     = @LIBS@
+MAN8     = crude.8
+
+CRUDE_OBJS = main.o
+
+##############################################################################
+# Rules for make
+##############################################################################
+.c.o:
+	$(CC) $(CFLAGS) $(DEFS) -c -o $*.o $<
+
+all:	crude
+
+crude:	$(CRUDE_OBJS)
+	$(CC) $(CFLAGS) $(LIBS) $(DEFS) $(LDFLAGS) -o crude $(CRUDE_OBJS)
+
+clean:
+	rm -f *~ *.o crude
+
+distclean:
+	rm -f *~ *.o crude Makefile
+
+install: crude
+	@if [ ! -d $(bindir) ]; then mkdir -m 0755 $(bindir); fi;
+	$(INSTALL) crude $(bindir)
+	@if [ ! -d $(mandir) ]; then mkdir -m 0755 $(mandir); fi;
+	$(INSTALL) crude.8 $(mandir)
+##############################################################################

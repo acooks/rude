@@ -1,0 +1,93 @@
+.TH CRUDE 8
+.SH NAME
+crude \- collector for rude (real-time UDP data emitter)
+.SH SYNOPSIS
+.B crude
+.B [ -h ] [ -v ] [ -d
+.I file
+.B ] [ -P
+.I 0-90
+.B ] [ -p
+.I port 
+.B ] [ -i
+.I ip_addr
+.B ] [ -l 
+.I file
+.B ] [ -s
+.I flow_id_list
+.B ] [ -n
+.I number 
+.B ] 
+
+.SH DESCRIPTION
+
+.IB Crude 
+is the receiver and logging utility for flows that are generated
+with the 
+.IB rude(8) 
+tool. In the default operation mode 
+.IB crude 
+prints the information to standard output, so you'll have to redirect it to
+file if you like to process it later on. Our recommendation is to log the 
+data into file with the '-l' option. This reduces I/O operations because the 
+data is logged in binary format and soforth improves performance. You can 
+decode the file later on with the option '-d'. If you want simple statistics
+of specific flows use the '-s' option. Note that options '-d' and '-s' are
+mutually exclusive.
+
+.SH OPTIONS
+.IP \fB\-h 
+Print a short help.
+.IP \fB\-v
+Print the version information. 
+.IP \fB\-d
+Decode the capture to stdout from \fIfile\fP, which was generated 
+by the '-l' option.
+.IP \fB\-P
+Set the process in real-time round-robin scheduling with the given 
+.IB priority\fP. 
+Needs root permission. Use with care.
+.IP \fB\-p 
+Set the UDP 
+.IB port \fP 
+to listen to. The default is 10001.
+.IP \fB\-i
+Set the physical interface to listen from. The argument is the IP 
+.IB address 
+for the specific interface in numerical dotted notation (a.b.c.d). If this
+is not set, the program will listen to all interfaces.
+.IP \fB\-l
+Log the capture into 
+.IB file
+in binary format. The default action is to print out the decoded info into 
+stdout.
+.IP \fB\-s
+Print statistics of the given 
+.IB flowlist
+to stdout. The 
+.IB flowlist 
+is a comma separated list of flow-identifiers. The statistics for each flow
+include:
+        o number of received packets
+        o num. of packets received out of sequence
+        o estimated number of lost packets
+        o total bytes received
+        o average delay
+        o absolute maximum jitter
+        o throughtput
+.IP \fB\-n 
+Set the
+.IB number
+of packets to capture. The default value is 0, which means until interrupted 
+with CTRL+C. 
+
+.SH BUGS
+I hear them crawling in my head.
+.PP
+Please report any other bugs to the authors.
+.SH AUTHORS
+Juha Laine, TUT <james@cs.tut.fi> and Sampo Saaristo, TUT <sambo@cs.tut.fi> and Rui Prior, <rprior@inescporto.pt> 
+
+.SH "SEE ALSO"
+rude(8)
+.\"{{{}}}

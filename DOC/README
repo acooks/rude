@@ -1,0 +1,173 @@
+				RUDE and CRUDE
+				==============
+
+
+ This project is distributed under the terms of GNU General Public License
+ Version 2, which can be found e.g. in the file COPYING that is located
+ in this very same directory. Read it for more detailed information.
+
+
+ The copyright is owned by the authors:
+
+ (C) 1999 Juha Laine and Sampo Saaristo
+
+
+
+INTRODUCTION (very short):
+--------------------------
+
+
+* RUDE [Real-time UDP Data Emitter]
+
+       As the name says, this piece of program can generate UDP traffic
+       to the network. Read more from "README.rude".
+
+
+* CRUDE [Collector for RUDE]
+
+       This program can log the traffic that is generated with the RUDE
+       for later processing. Read more from "README.crude".
+
+
+
+COMPILATION AND INSTALLATION INSTRUCTIONS:
+------------------------------------------
+
+ 1. This package you have received should contain the automatic 'configure'
+    script in the source code root directory. If this is true you can jump
+    into the step 4. Otherwise read also the steps 2. and 3. that explain
+    the procedure how to create the configure script with the GNU autoconf
+    utilities.
+
+
+ 2. So you have the very clean version. Alright. Before you can compile
+    the program you should make the configuration script(s) and other
+    files with the GNU autoconf utilities. In other words you require
+    properly installed 'autoheader' and 'autoconf' programs. At least
+    version 2.13 of the GNU autoconf tools seems to work fine.
+    [ After those programs are installed you can move on.... ]
+
+
+ 3. You need to generate some header file(s) and the configuration script
+    with the following commands (you must be in the program's source code
+    root directory):
+
+	autoheader -l ./autoconf
+	autoconf autoconf/configure.in > configure
+	chmod 755 configure
+
+
+ 4. Now you are ready to go on and configure this software package. As
+    usual, you can say './configure --help' to get the full list of
+    configuring switches. Here are only the usually required options:
+
+	--prefix=PREFIX         = Installation directory root (/usr/local/)
+	--enable-debug          = Enable compiler option -g
+	--enable-wall           = Enable compiler option -Wall (gcc only)
+	--with-debug-lvl=[0-7]  = Set program debugging output level
+
+    RECOMMENDED CONFIGURATION COMMAND IS:
+    -------------------------------------
+
+	./configure --enable-wall --with-debug-lvl=3
+
+
+ 5. 'make all'
+
+    So far this program is tested on Linux and Solaris2.6 OS's and
+    seems to compile/operate without any major drawbacks. Your mileage
+    may vary...
+
+
+ 6. 'make install'
+
+    USE MANUAL INSTALLATION IF THIS FAILS. SORRY 'BOUT THAT :)
+    Only ROOT can successfully execute this command.
+
+ ...and that's it.
+
+
+EXAMPLES AND SOME HELPER APPLICATIONS
+-------------------------------------
+
+ ** You can find well-commented example script for the rude in this
+    directory under name "example.cfg". Read also the "README.rude" file.
+
+
+ ** There are some example scripts (made with Perl) that can manipulate
+    the decoded output from CRUDE. They are located in the "scripts"
+    directory. They parse the decoded/text output from the crude and
+    produce somewhat more informatic output e.g. to use with gnuplot
+    program.
+
+    BEFORE EXECUTING, CHECK THAT THE FIRST LINE OF THOSE SCRIPTS MATCH
+    YOUR CONFIGURATION - i.e. the correct path to the Perl, which must
+    be installed in your system.
+
+
+    crude_jitter.pl produces N output files (one for each detected flow)
+    under names "jitter.<flow ID>". These files contain 2 columns.
+
+	- 1st = column lists the packet sequence numbers
+	- 2nd = column lists the time between this and the previous packet
+
+    So it is not actually "jitter" but if plotted it can be easily observed.
+    If the packet was lost the script skips to the next packet and marks
+    the error into the 3rd usually invisible column with negative error
+    index...
+
+
+    crude_parse.pl produces also N output files (one for each detected flow)
+    under names "data.<flow ID>". These files contain 6 columns.
+
+	- 1st = flow ID
+	- 2nd = timeslot ("sample time")
+	- 3rd = average bandwith usage during this timeslot
+	- 4th = total number of sent bytes for this flow
+	- 5th = received packet INDEX
+	- 6th = stamped packet sequence number
+
+
+    Both of these scripts understand the "-h" command line option that
+    prints out the short usage/command line switch instructions. The
+    input file should be the decoded (text formatted) file produced by
+    the crude utility.
+
+    Use with care - they are still under construction :)
+
+
+HOW TO ADD/CREATE NEW TRAFFIC CLASS
+-----------------------------------
+
+  Here will be short (step by step) instructions for programmers that
+  wish to add own traffic/flow types to rude.
+
+
+  -=* THIS SECTION IS STILL UNDER CONSTRUCTION, SO IT GIVES JUST AN *=-
+  -=* OVERVIEW AND SOME IMPORTANT STEPS ARE PROPABLY MISSING :)     *=-
+
+
+  1)	Add your flow type to the 'enum f_type' in "../include/rude.h"
+
+  2)	Create the private struct for this flows parameters in
+        "../include/rude.h"
+
+  3)    Add the new struct to the 'union params' in 'struct flow_cfg'
+        in "../include/rude.h"
+
+  4)    Add the name->f_type conversion in the function 'check_type()'
+	in "../rude/parse.c"
+
+  5)    Add the flow transmission function in to "../rude/flow_txmit.c"
+
+  6)	Add the parsing to the function 'flow_on()' in "../rude/parse.c"
+
+  7)	Add the parsing to the function 'flow_modify()' in "../rude/parse.c"
+
+  8)	Add the case that checks the maximum packet size to the end of
+	'read_cfg()' in "../rude/parse.c"
+
+  9)	Add necessary commands to free acquired memory (if required) in
+	'clean_up()' in "../rude/flow_cntl.c"
+
+<...Here should be more info when the implementation gets more stable...>

@@ -1,0 +1,6 @@
+Things to do / under construction:
+
+ * update the documentation (README.rude & README.crude)
+ * systematic testing for the *new* TRACE flow type
+ * add new flow types (any suggestions? - mail them to authors)
+ * improve the performance and fix the bugs :)
