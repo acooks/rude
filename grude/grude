@@ -1,0 +1,1713 @@
+#!/usr/bin/perl -w
+
+# Graphical shell for the rude/crude traffic generator and analyser
+# Written by: Rui Prior <rprior@ncc.up.pt>
+# Distributed under the GPLv2 license: see http://www.gnu.org/copyleft/gpl.html
+# for details.
+
+use Tk;
+use Tk::FileSelect;
+use Tk::Dialog;
+use Tk::BrowseEntry;
+use Tk::HList;
+use IPC::Open3;
+use IO::Select;
+use File::Temp "tempdir";
+use Cwd;
+use File::Path;
+use File::Copy;
+
+$version = '1.0';
+
+$end = '$'; # Damned interpolation on regexps...
+
+# Parse command line args
+if ($#ARGV >= 0) {
+   if ($ARGV[0] eq '-h' or $ARGV[0] eq '--help') {
+      print "Usage: grude [file.grd]\n\n";
+      exit;
+   }
+   $argfile = $ARGV[0];
+   # emitter() needs an existing MainWindow at $mw
+   $mw = MainWindow->new(-title => 'Grude');
+   emitter();
+   @ARGV = ();
+} else {
+   # The usual
+   main();
+}
+
+MainLoop;
+
+sub main {
+   # General cleanup
+   undef %tred if defined %tred;
+   undef %fsed if defined %fsed;
+   undef %fled if defined %fled;
+   undef %coll if defined %coll;
+   undef %tx if defined %tx;
+   
+   if ($mw) {
+      foreach $widget ($mw->children) { destroy $widget }
+   } else {
+      $mw = MainWindow->new(-title => 'Grude');
+   }
+
+   $fchoice = $mw->Frame;
+   $choice = 'emitter';
+   $fchoice->Radiobutton(-text => 'Emitter (rude)',
+                         -variable => \$choice,
+                         -value => 'emitter')->grid(-sticky => 'w');
+   $fchoice->Radiobutton(-text => 'Collector (crude)',
+                         -variable => \$choice,
+                         -value => 'collector')->grid(-sticky => 'w');
+   $fchoice->Radiobutton(-text => 'Decode file (crude)',
+                         -variable => \$choice,
+                         -value => 'decoder')->grid(-sticky => 'w');
+   $fchoice->grid(-padx => 20, -pady => 5);
+   $fb = $mw->Frame;
+   $fb->Button(-text => 'Go',
+               -command => sub {eval "$choice"})->grid(-row => 0, -column => 0,
+                                                       -padx => 5, -pady => 5);
+   $fb->Button(-text => 'Quit',
+               -command => sub {exit})->grid(-row => 0, -column => 1,
+                                             -padx => 5, -pady => 5);
+   $fb->grid();
+   $mw->resizable(0,0);
+   $mw->update;
+   $mw->geometry($mw->reqwidth() . 'x' . $mw->reqheight());
+}
+
+
+sub modsort {
+   if ($a eq 'initial') { return -1;}
+   elsif ($b eq 'initial') { return 1;}
+   else { return $a <=> $b}
+}
+
+
+sub valid_txparms {
+   if ($tx{'start'} ne 'NOW' and
+       ($tx{'starth'} !~ /^(\d\d)$end/ or $1 > 23 or
+        $tx{'startm'} !~ /^(\d\d)$end/ or $1 > 59 or
+        $tx{'starts'} !~ /^(\d\d)$end/ or $1 > 59)
+      ) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid global start time: must be HH:MM:SS',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if ($tx{'srt'} and ($tx{'srtprio'} !~ s/^\s*(\d{1,2})\s*$end/$1/ or
+                       $1 < 1 or $1 > 90)) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Soft real-time priority must be in range 1..90',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if (!defined $fled{'flows'} or ! scalar %{$fled{'flows'}}) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Must specify at least one flow',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   return 1;   # Good
+}
+
+
+sub valid_flow {
+   my $flow = $_[0];
+   my $oldid = $_[1];
+   if ($$flow{'id'} !~ s/^\s*(\d+)\s*$end/$1/) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid flow ID',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if ($$flow{'tstart'} !~ s/^\s*(\d+)\s*$end/$1/) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid start time',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if ($$flow{'tstop'} !~ s/^\s*(\d+)\s*$end/$1/) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid start time',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if ($$flow{'tstop'} <= $$flow{'tstart'}) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Stop time must be greater than start time',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   my $max = 0;
+   foreach $mod (keys %{$$flow{'mods'}}) {
+      $max = $mod if $mod ne 'initial' and $mod > $max;
+   }
+   if ($max >= $$flow{'tstop'}) {
+      $max++;
+      my $option = $mw->Dialog(-title => 'Warning',
+         -text => 'Start instant must precede '.
+                  'flow stop, at '.$$flow{'tstop'}.
+                  ' msecs. Change flow stop time to '.$max.'?',
+         -bitmap => 'warning',
+         -buttons => ['Change','Cancel'])->Show;
+      return if ($option eq 'Cancel');
+      $$flow{'tstop'} = $max;
+   }
+   if ($$flow{'daddr'} !~ s/^\s*((\w|-)+(\.(\w|-)+)*)\s*$end/$1/) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid destination address',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if ($$flow{'dport'} !~ s/^\s*(\d+)\s*$end/$1/ or $$flow{'dport'} > 65535) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid destination port',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   if ($$flow{'sport'} !~ s/^\s*(\d+)\s*$end/$1/ or $$flow{'sport'} > 65535
+       or $$flow{'sport'} < 1024) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid source port',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   my ($key, $val);
+   keys %{$fled{'flows'}}; # Reset "each"
+   while (($key, $val) = each %{$fled{'flows'}}) {
+      if ($$val{'sport'} == $$flow{'sport'} and $key != $oldid and
+          $key != $$flow{'id'}) {
+         $mw->Dialog(-title => 'Warning',
+            -text => "Source port $$flow{'sport'} already in use by flow $key. Please choose another one.",
+            -bitmap => 'warning',
+            -buttons => ['Dismiss'])->Show;
+         return 0;
+      }
+   }
+   if ($$flow{'settos'} and
+       $$flow{'tos'} !~ s/^\s*(0x(\d|[a-f]|[A-F]){2})\s*$end/$1/ and
+       ($$flow{'tos'} !~ s/^\s*(\d{1,3})\s*$end/$1/ or $$flow{'tos'} > 255)) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Invalid TOS value',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   return 1; # Congratulations!
+}
+
+
+sub editfspec {
+   my $flow = $_[0];
+   my $mod;
+   my %fmod;
+   if (defined $_[1]) {
+      $mod = ${$_[1]};
+      %fmod = %{${$$flow{'mods'}}{$mod}};
+   } else {
+      $mod = 'new';
+   }
+   $fsed{'window'} = $fled{'window'}->Toplevel(-title => "Flow ".$$flow{'id'}.": $mod");
+   my $esw = $fsed{'window'};
+   $esw->grab;
+   $esw->resizable(0,0);
+   $esw->protocol('WM_DELETE_WINDOW', sub { $fled{'window'}->grab;
+                                            $esw->destroy });
+   my $fr;
+   my $optlist;
+   if ($mod ne 'initial') {
+      $fr = $esw->Frame;
+      $fr->grid(-row => 0, -column => 0, -padx => 5, -pady => 5);
+      $fr->Label(-text => 'Instant')->grid(-row => 0, -column => 0);
+      if ($mod eq 'new') {
+         my $n = $$flow{'tstart'} + 1;
+         foreach (keys %{$$flow{'mods'}}) {
+            $n = $_ + 1 if (/^\d+$end/ and $_ >= $n);
+         }
+         $fsed{'inst'} = $n;
+      } else {
+         $fsed{'inst'} = $mod;
+      }
+      $fsed{'einst'} = $fr->Entry(-width => 8, -textvariable => \$fsed{'inst'});
+      $fsed{'einst'}->grid(-row => 0, -column => 1);
+
+      $optlist = [['Constant','CONSTANT'],['Trace','TRACE'],['Silent','SILENT']];
+   } else {
+      $optlist = [['Constant','CONSTANT'],['Trace','TRACE'],['Silent','SILENT']];
+   }
+   $fr = $esw->Frame;
+   $fr->grid(-row => 1, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'Type')->grid(-row => 0, -column => 0);
+   $fmod{'type'} = 'CONSTANT' if ! defined $fmod{'type'};
+   undef $fsed{'bedit'};
+   my $dummyopt;
+   if ($fmod{'type'} eq 'CONSTANT') {
+      $dummyopt = 'Constant';
+   } elsif ($fmod{'type'} eq 'TRACE') {
+      $dummyopt = 'Trace';
+   } elsif ($fmod{'type'} eq 'SILENT') {
+      $dummyopt = 'Silent';
+   }
+   # Must use -textvariable to avoid overwriting the old variable value
+   $fsed{'optmen'} = $fr->Optionmenu(-variable => \$fmod{'type'},
+      -textvariable => \$dummyopt,
+      -options => $optlist,
+      -command => sub {
+         return if ! defined $fsed{'bedit'};
+         if ($fmod{'type'} eq 'CONSTANT') {
+            $fsed{'bedit'}->configure(-state => 'disabled');
+            $fsed{'esize'}->configure(-state => 'normal',
+                                      -textvariable => \$fmod{'size'});
+            $fsed{'erate'}->configure(-state => 'normal',
+                                      -textvariable => \$fmod{'rate'});
+         } elsif ($fmod{'type'} eq 'TRACE') {
+            $fsed{'bedit'}->configure(-state => 'normal');
+            $fsed{'esize'}->configure(-state => 'disabled', -text => '');
+            $fsed{'erate'}->configure(-state => 'disabled', -text => '');
+         } elsif ($fmod{'type'} eq 'SILENT') {
+            $fsed{'bedit'}->configure(-state => 'disabled');
+            $fsed{'esize'}->configure(-state => 'disabled', -text => '');
+            $fsed{'erate'}->configure(-state => 'disabled', -text => '');
+         }
+      } );
+   $fsed{'optmen'}->grid(-row => 0, -column => 1);
+   $fr->gridColumnconfigure(2, -minsize => 10);
+   $fsed{'bedit'} = $fr->Button(-text => 'Edit',
+                                -command => [ \&edittrace, $$flow{'id'},
+                                              $mod, \%fmod ]);
+   $fsed{'bedit'}->grid(-row => 0, -column => 3);
+   $fr = $esw->Frame;
+   $fr->grid(-row => 2, -column => 0, -padx => 5, -pady => 5, -sticky => 'ew');
+   $fmod{'size'} = 64 if ! defined $fmod{'size'};
+   $fsed{'lsize'} = $fr->Label(-text => 'Size');
+   $fsed{'lsize'}->grid(-row => 0, -column => 0);
+   $fsed{'esize'} = $fr->Entry(-width => 8);
+   $fsed{'esize'}->grid(-row => 0, -column => 1);
+   $fr->gridColumnconfigure(2, -minsize => 10);
+   $fmod{'rate'} = 1 if ! defined $fmod{'rate'};
+   $fsed{'lrate'} = $fr->Label(-text => 'Rate');
+   $fsed{'lrate'}->grid(-row => 0, -column => 3);
+   $fsed{'erate'} = $fr->Entry(-width => 8);
+   $fsed{'erate'}->grid(-row => 0, -column => 4);
+   if ($fmod{'type'} eq 'CONSTANT') {
+      $fsed{'bedit'}->configure(-state => 'disabled');
+      $fsed{'esize'}->configure(-state => 'normal',
+                                -textvariable => \$fmod{'size'});
+      $fsed{'erate'}->configure(-state => 'normal',
+                                -textvariable => \$fmod{'rate'});
+   } elsif ($fmod{'type'} eq 'TRACE') {
+      $fsed{'bedit'}->configure(-state => 'normal');
+      $fsed{'esize'}->configure(-state => 'disabled', -text => '');
+      $fsed{'erate'}->configure(-state => 'disabled', -text => '');
+   } elsif ($fmod{'type'} eq 'SILENT') {
+      $fsed{'bedit'}->configure(-state => 'disabled');
+      $fsed{'esize'}->configure(-state => 'disabled', -text => '');
+      $fsed{'erate'}->configure(-state => 'disabled', -text => '');
+   }
+   $fr = $esw->Frame;
+   $fr->grid(-row => 3, -column => 0, -padx => 5, -pady => 5, -sticky => 'ew');
+   $fr->Button(-text => 'Accept',
+               -command => sub {
+                  if ($fmod{'type'} eq 'CONSTANT') {
+                     if ($fmod{'size'} !~ s/^\s*0*(\d+)\s*$end/$1/
+                         or $fmod{'size'} < 20 or $fmod{'size'} > 32768) {
+                        $mw->Dialog(-title => 'Warning',
+                                    -text => 'Size must be 20 <= size <= 32768',
+                                    -bitmap => 'warning',
+                                    -buttons => ['Dismiss'])->Show;
+                        return;
+                     }
+                     if ($fmod{'rate'} !~ s/^\s*0*(\d+)\s*$end/$1/) {
+                        $mw->Dialog(-title => 'Warning',
+                                    -text => 'Rate must be a positive integer',
+                                    -bitmap => 'warning',
+                                    -buttons => ['Dismiss'])->Show;
+                        return;
+                     }
+                     if ($fmod{'rate'} == 0) {
+                        $mw->Dialog(-title => 'Warning',
+                                    -text => 'Rate=0: changing type to Silent',
+                                    -bitmap => 'warning',
+                                    -buttons => ['Dismiss'])->Show;
+                        $fmod{'type'} = 'SILENT';
+                     }
+                  } elsif ($fmod{'type'} eq 'TRACE') {
+                     if ($#{$fmod{'trace'}} == -1) {
+                        $mw->Dialog(-title => 'Warning',
+                           -text => 'Trace list must be non-empty',
+                           -bitmap => 'warning',
+                           -buttons => ['Dismiss'])->Show;
+                        return;
+                     }
+                  }
+                  if ($mod ne 'initial') {
+                     if ($fsed{'inst'} !~ s/^\s*0*(\d+)\s*$end/$1/) {
+                        $mw->Dialog(-title => 'Warning',
+                           -text => 'Start instant must be a positive integer!',
+                           -bitmap => 'warning',
+                           -buttons => ['Dismiss'])->Show;
+                        return;
+                     }
+                     if ($fsed{'inst'} <= $$flow{'tstart'}) {
+                        $mw->Dialog(-title => 'Warning',
+                           -text => 'Start instant must be after '.
+                                    'flow start, at '.$$flow{'tstart'}.
+                                    ' msecs',
+                           -bitmap => 'warning',
+                           -buttons => ['Dismiss'])->Show;
+                        return;
+                     } elsif ($fsed{'inst'} >= $$flow{'tstop'}) {
+                        my $option = $mw->Dialog(-title => 'Warning',
+                           -text => 'Start instant must precede '.
+                                    'flow stop, at '.$$flow{'tstop'}.
+                                    ' msecs. Change flow stop time?',
+                           -bitmap => 'warning',
+                           -buttons => ['Change','Cancel'])->Show;
+                        return if ($option eq 'Cancel');
+                        $$flow{'tstop'} = $fsed{'inst'} + 1;
+                     }
+                     if ($mod ne $fsed{'inst'}) {
+                        if (defined ${$$flow{'mods'}}{$fsed{'inst'}}) {
+                           my $option = $mw->Dialog(-title => 'Warning',
+                              -text => 'Overwrite spec '.$fsed{'inst'}.'?',
+                              -bitmap => 'warning',
+                              -buttons => ['Confirm', 'Cancel'],
+                              -default_button => 'Cancel')->Show;
+                           return if ($option eq 'Cancel');
+                        }
+                        delete ${$$flow{'mods'}}{$mod} if ($mod ne 'new');
+                     }
+                     # This must be the last thing done before commitment
+                     $mod = $fsed{'inst'};
+                  }
+                  ${$$flow{'mods'}}{$mod} = \%fmod;
+                  $fled{'ddmods'}->configure(
+                     -options => [ sort modsort keys %{$$flow{'mods'}} ]
+                     );
+                  $fled{'window'}->grab;
+                  $esw->destroy;
+               }
+              )->grid(-row => 0, -column => 0);
+   $fr->gridColumnconfigure(1, -minsize => 10);
+   $fr->Button(-text => 'Cancel', -command => sub {$fled{'window'}->grab;
+                                                   $esw->destroy }
+              )->grid(-row => 0, -column => 2);
+   $fmod{'trace'} = [] if ! defined $fmod{'trace'};
+}
+
+
+sub edittrace {
+   my $flowid = $_[0];
+   my $mod = $_[1];
+   my $fmod = $_[2];
+   $tred{'n'} = 0;
+   my @eplist;
+   my @trace = @{$$fmod{'trace'}};
+   $tred{'window'} = $fsed{'window'}->Toplevel(-title => "Flow $flowid\: $mod - trace");
+   my $etw = $tred{'window'};
+   $etw->grab;
+   $etw->resizable(0,0);
+   $etw->protocol('WM_DELETE_WINDOW', sub { $fsed{'window'}->grab;
+                                            $etw->destroy });
+   my $fr = $etw->Frame;
+   $fr->grid(-row => 0, -column => 0, -padx => 5, -pady => 5, -sticky => 'ns');
+   $tred{'scrl'} = $fr->Scrolled('HList', -header => 1, -columns => 2,
+                                 -width => 22, -height => 8,
+                                 -itemtype => 'text', -selectmode => 'single',
+                                 -scrollbars => 'ose', -bg => 'white');
+   $tred{'scrl'}->grid(-row => 0, -column => 0, -rowspan => 4, -sticky => 'ns');
+   $tred{'list'} = $tred{'scrl'}->Subwidget('hlist');
+   $tred{'list'}->configure(-browsecmd => sub {
+         if (! $tred{'list'}->info('selection') eq '') {
+            $tred{'bdel'}->configure(-state => 'normal');
+         }
+      });
+   $tred{'list'}->header('create', 0, -text => 'Size',
+                         -headerbackground => $tred{'window'}->cget('bg'));
+   $tred{'list'}->columnWidth(0, -char => 8);
+   $tred{'list'}->header('create', 1, -text => 'Wait',
+                         -headerbackground => $tred{'window'}->cget('bg'));
+   $tred{'list'}->columnWidth(1, -char => 12);
+   $tred{'bdel'} = $fr->Button(-text => 'Del', -state => 'disabled',
+                               -command => sub {
+         my $sel = $tred{'list'}->info('selection');
+         if (! defined $sel or $sel eq '') {
+            $tred{'bdel'}->configure(-state => 'disabled');
+         } else {
+            $tred{'list'}->delete('entry', $sel);
+            my $i;
+            for ($i = 0; $i <= $#eplist; $i++) {
+               last if ($eplist[$i] == $sel);
+            }
+            splice(@eplist, $i, 1);
+            splice(@trace, 2*$i, 2);
+         }
+      });
+   $tred{'bdel'}->grid(-column => 1, -row => 1, -padx => 3, -sticky => 'ew');
+   $tred{'esize'} = '';
+   $tred{'ewait'} = '';
+   $fr->Button(-text => 'Add',
+               -command => sub {
+                  if ($tred{'esize'} !~ s/^\s*(\d+)\s*$end/$1/
+                      or $tred{'esize'} < 20 or $tred{'esize'} > 32768) {
+                     $mw->Dialog(-title => 'Warning',
+                                 -text => 'Size must be 20 <= size <= 32768',
+                                 -bitmap => 'warning',
+                                 -buttons => ['Dismiss'])->Show;
+                     return;
+                  }
+                  if ($tred{'ewait'} !~ s/^\s*(\d+|(\d*\.\d+)?)\s*$end/$1/) {
+                     $mw->Dialog(-title => 'Warning',
+                                 -text => 'Bad wait specification',
+                                 -bitmap => 'warning',
+                                 -buttons => ['Dismiss'])->Show;
+                     return;
+                  }
+                  # Add after selected entry or at the end if none selected
+                  my $i;
+                  my $n = $tred{'n'}++;
+                  my $sel = $tred{'list'}->info('selection');
+                  if (! defined $sel or $sel eq '') {
+                     push(@eplist, $n);
+                     push(@trace, ($tred{'esize'}, $tred{'ewait'}));
+                     $tred{'list'}->add($n);
+                  } else {
+                     for ($i = 0; $i <= $#eplist; $i++) {
+                        if ($eplist[$i] == $sel) {
+                           $i++;
+                           last;
+                        }
+                     }
+                     splice(@eplist, $i, 0);
+                     splice (@trace, 2*$i, 0, ($tred{'esize'}, $tred{'ewait'}));
+                     $tred{'list'}->add($n, -after => $sel);
+                  }
+                  $tred{'list'}->itemCreate($n, 0, -text => $tred{'esize'});
+                  $tred{'list'}->itemCreate($n, 1, -text => $tred{'ewait'});
+                  $tred{'esize'} = '';
+                  $tred{'ewait'} = '';
+               }
+              )->grid(-column => 1, -row => 2, -padx => 3, -sticky => 'ew');
+   $fr = $etw->Frame;
+   $fr->grid(-row => 1, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'Size')->grid(-row => 0, -column => 0);
+   my $ent = $fr->Entry(-width => 6, -textvariable => \$tred{'esize'});
+   $ent->grid(-row => 0, -column => 1);
+   $fr->gridColumnconfigure(2, -minsize => 10);
+   $fr->Label(-text => 'Wait')->grid(-row => 0, -column => 3);
+   $fr->Entry(-width => 10, -textvariable => \$tred{'ewait'}
+             )->grid(-row => 0, -column => 4);
+
+   $tred{'list'}->configure(-selectforeground => $ent->cget('selectforeground'),
+                           -selectbackground => $ent->cget('selectbackground'));
+
+   my $n = 0;
+   my $i = 0;
+   foreach (@trace) {
+      if ($i % 2) {
+         $tred{'list'}->itemCreate($n, 1, -text => $trace[$i]);
+         push(@eplist, $n);
+         $n++;
+      } else {
+         $tred{'list'}->add($n);
+         $tred{'list'}->itemCreate($n, 0, -text => $trace[$i]);
+      }
+      $i++;
+   }
+   $tred{'n'} = $n;
+
+   $fr = $etw->Frame;
+   $fr->grid(-row => 2, -column => 0, -padx => 5, -pady => 5);
+   $fr->Button(-text => 'Accept', -command => sub {
+         $$fmod{'trace'} = \@trace;
+         $fsed{'window'}->grab;
+         $etw->destroy;
+      })->grid(-column => 0, -row => 0, -padx => 3);
+   $fr->gridColumnconfigure(1, -minsize => 20);
+   $fr->Button(-text => 'Cancel', -command => sub {$fsed{'window'}->grab;
+                                                   $etw->destroy }
+              )->grid(-column => 2, -row => 0, -padx => 3);
+}
+
+
+sub editflow {
+   $fled{'window'} = $mw->Toplevel;
+   my $efw = $fled{'window'};
+   $efw->grab;
+   $efw->resizable(0,0);
+   $fled{'flows'} = {} if !defined $fled{'flows'};
+   my $flows;
+   $flows = $fled{'flows'};
+
+   my $flowid;
+   if (defined $_[0]) {
+      $efw->configure(-title => 'Edit flow');
+      $flowid = $_[0];
+   } else {
+      $efw->configure(-title => 'New flow');
+      $flowid = 0;
+      foreach $id (keys %{$fled{'flows'}}) {
+         $flowid = $id + 1 if $id >= $flowid;
+      }
+   }
+   my %flow;
+   my $oldflow = 0;
+   if (defined $$flows{$flowid}) {
+      $oldflow = 1;
+      %flow = %{$$flows{$flowid}};
+   } else {
+      # New flow - defaults
+      $flow{'mods'} = {'initial' => {'type' => 'CONSTANT',
+                                     'rate' => '1',
+                                     'size' => '64'}};
+      $flow{'tstart'} = 0;
+      $flow{'tstop'} = $flow{'tstart'} + 1000;
+      $flow{'daddr'} = '';
+      $flow{'dport'} = 10001;
+      $flow{'sport'} = 1024;
+      $flow{'settos'} = 0;
+      $flow{'tos'} = 0;
+   }
+
+   my $fr = $efw->Frame;
+   $fr->grid(-row => 0, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'ID')->grid(-row => 0, -column => 0);
+   $flow{'id'} = $flowid;
+   $fr->Entry(-textvariable => \$flow{'id'}, -width => 5
+             )->grid(-row => 0, -column => 1);
+   $fr->gridColumnconfigure(2, -minsize => 10);
+   $fr->Label(-text => 'Tstart')->grid(-row => 0, -column => 3);
+   $fr->Entry(-textvariable => \$flow{'tstart'}, -width => 8
+             )->grid(-row => 0, -column => 4);
+   $fr->gridColumnconfigure(5, -minsize => 10);
+   $fr->Label(-text => 'Tstop')->grid(-row => 0, -column => 6);
+   $fr->Entry(-textvariable => \$flow{'tstop'}, -width => 8
+             )->grid(-row => 0, -column => 7);
+
+   $fr = $efw->Frame;
+   $fr->grid(-row => 1, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'DST Addr')->grid(-row => 0, -column => 0);
+   $fr->Entry(-textvariable => \$flow{'daddr'}, -width => 20
+             )->grid(-row => 0, -column => 1);
+   $fr->gridColumnconfigure(2, -minsize => 10);
+   $fr->Label(-text => 'Port')->grid(-row => 0, -column => 3);
+   $fr->Entry(-textvariable => \$flow{'dport'}, -width => 5
+             )->grid(-row => 0, -column => 4);
+
+   $fr = $efw->Frame;
+   $fr->grid(-row => 2, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'SRC Port')->grid(-row => 0, -column => 0);
+   $fr->Entry(-textvariable => \$flow{'sport'}, -width => 5
+             )->grid(-row => 0, -column => 1);
+   $fr->gridColumnconfigure(2, -minsize => 10);
+   $fr->Checkbutton(-text => 'Set TOS to', -variable => \$flow{'settos'}
+                   )->grid(-row => 0, -column => 3);
+   $fr->Entry(-textvariable => \$flow{'tos'}, -width => 5
+             )->grid(-row => 0, -column => 4);
+
+   $fr = $efw->Frame;
+   $fr->grid(-row => 3, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'Specs')->grid(-row => 0, -column => 0);;
+   $fr->Button(-text => 'Add',
+               -command => sub {
+                  if ($flow{'tstart'} !~ /^\s*\d+\s*$end/ or
+                      $flow{'tstop'} !~ /^\s*\d+\s*$end/ or
+                      $flow{'tstop'} <= $flow{'tstart'}) {
+                     $mw->Dialog(-title => 'Warning',
+                        -text => 'Please specify valid Tstart and Tstop.',
+                        -bitmap => 'warning',
+                        -buttons => ['Dismiss'])->Show;
+                     return 0;
+                  }
+                  editfspec(\%flow);
+               }
+              )->grid(-row => 0, -column =>2);
+   $fled{'selmod'} = 'initial';
+   $fled{'bdel'} = $fr->Button(-text => 'Del', -state => 'disabled',
+                               -command => sub {
+                  return if $fled{'selmod'} eq 'initial';
+                  delete ${$flow{'mods'}}{$fled{'selmod'}};
+                  $fled{'ddmods'}->configure(
+                     -options => [ sort modsort keys %{$flow{'mods'}} ] ); }
+                              );
+   $fled{'bdel'}->grid(-row => 0, -column =>3);
+   $fr->Button(-text => 'Edit',
+               -command => [ \&editfspec, \%flow, \$fled{'selmod'} ]
+              )->grid(-row => 0, -column => 4);
+   $fled{'ddmods'} = $fr->Optionmenu(-variable => \$fled{'selmod'},
+                                     -command => sub {
+         if ($fled{'selmod'} eq 'initial') {
+            $fled{'bdel'}->configure(-state => 'disabled');
+         } else {
+            $fled{'bdel'}->configure(-state => 'normal');
+        }
+     });
+   $fled{'ddmods'}->addOptions(sort modsort keys %{$flow{'mods'}});
+   $fled{'ddmods'}->grid(-row => 0, -column => 1);
+   $fr = $efw->Frame;
+   $fr->grid(-row => 4, -column => 0, -padx => 5, -pady => 5);
+   $fr->Button(-text => 'Accept',
+               -command => sub {
+                  return if !valid_flow(\%flow, $flowid);
+                  if ($flow{'id'} != $flowid) {
+                     if (defined $$flows{$flow{'id'}}) {
+                        my $option = $mw->Dialog(-title => 'Warning',
+                           -text => "Flow $flow{'id'} already exists. Do you want to overwrite it?",
+                           -bitmap => 'warning',
+                           -buttons => ['Overwrite', 'Cancel'],
+                           -default_button => 'Cancel')->Show;
+                        return unless ($option eq 'Overwrite');
+                        my $index;
+                        my $menu = $tx{'edflows'}->menu;
+                        my $topidx = $menu->index('last');
+                        for ($index = 0; $index <= $topidx; $index++) {
+                           if ($menu->entrycget($index, -label)==$flow{'id'}) {
+                              $tx{'edflows'}->menu->delete($index);
+                              $tx{'delflows'}->menu->delete($index);
+                              last;
+                           }
+                        }
+                        print "Flow ",$flow{'id'}," not found in menus.\n"
+                           if $index > $topidx;
+                     }
+                     if ($oldflow) {
+                        delete $$flows{$flowid};
+                        my $index;
+                        my $menu = $tx{'edflows'}->menu;
+                        my $topidx = $menu->index('last');
+                        for ($index = 0; $index <= $topidx; $index++) {
+                           if ($menu->entrycget($index, -label)==$flowid) {
+                              $tx{'edflows'}->menu->delete($index);
+                              $tx{'delflows'}->menu->delete($index);
+                              last;
+                           }
+                        }
+                        print "Flow ",$flow{'id'}," not found in menus.\n"
+                           if $index > $topidx;
+                     }
+                  }
+                  $$flows{$flow{'id'}} = \%flow;
+                  $efw->destroy;
+                  $tx{'unsaved'} = 1;
+                  if (!$oldflow or $flow{'id'} != $flowid) {
+                     my $index;
+                     my $menu = $tx{'edflows'}->menu;
+                     my $topidx = $menu->index('last');
+                     $topidx = -1 if $topidx eq 'none';
+                     for ($index = 0; $index <= $topidx; $index++) {
+                        last if $menu->entrycget($index, -label) > $flow{'id'};
+                     }
+                     $tx{'edflows'}->menu->insert($index, 'command',
+                                                  -label => $flow{'id'},
+                                                  -command =>
+                                                     [\&editflow, $flow{'id'}]);
+                     $tx{'delflows'}->menu->insert($index, 'command',
+                        -label => $flow{'id'},
+                        -command => [\&delflow, $flow{'id'}]);
+                  }
+               }
+              )->grid(-row => 0, -column =>0, -padx => 3);
+   $fr->gridColumnconfigure(1, -minsize => 20);
+   $fr->Button(-text => 'Cancel',
+               -command => sub { $efw->destroy }
+              )->grid(-row => 0, -column =>2, -padx => 3);
+}
+
+
+sub delflow {
+   my $id = $_[0];
+   delete ${$fled{'flows'}}{$id};
+   my $index;
+   my $menu = $tx{'edflows'}->menu;
+   my $topidx = $menu->index('last');
+   for ($index = 0; $index <= $topidx; $index++) {
+      last if $menu->entrycget($index, -label) == $id;
+   }
+   if ($index > $topidx) {
+      print "Flow $id not found in menus.\n"
+   } else {
+      $tx{'edflows'}->menu->delete($index);
+      $tx{'delflows'}->menu->delete($index);
+   }
+}
+
+
+sub delall {
+   my $option = $mw->Dialog(-title => 'Warning',
+      -text => 'Warning: This will delete ALL flows!',
+      -bitmap => 'warning',
+      -buttons => ['Confirm', 'Cancel'],
+      -default_button => 'Cancel')->Show;
+   return if ($option eq 'Cancel');
+   foreach $id (keys %{$fled{'flows'}}) {
+      $tx{'edflows'}->menu->delete($id);
+      $tx{'delflows'}->menu->delete($id);
+   }
+   $fled{'flows'} = {};
+}
+
+
+sub emitter {
+   foreach $widget ($mw->children) { $widget->destroy }
+   my $fr;
+   $fr = $mw->Frame(-relief => 'raised', -borderwidth => 1);
+   $fr->grid(-row => 0, -column => 0, -sticky => 'ew');
+   $tx{'mbfile'} = $fr->Menubutton(-text => 'File');
+   $tx{'mbfile'}->pack(-side => 'left');
+   $tx{'mbfile'}->configure(-menu => $tx{'mfile'} = $tx{'mbfile'}->Menu(-tearoff => 0));
+   $tx{'mfile'}->command(-label => 'New', -command => \&reset_txconf);
+   $tx{'mfile'}->command(-label => 'Open', -command => \&open_file);
+   $tx{'mfile'}->command(-label => 'Save',
+                         -command => sub { save_file($tx{'file'}) });
+   $tx{'mfile'}->command(-label => 'Save as', -command => \&save_file);
+   $tx{'mbflows'} = $fr->Menubutton(-text => 'Flows');
+   $tx{'mbflows'}->pack(-side => 'left');
+   $tx{'mbflows'}->configure(-menu => $tx{'mflows'} = $tx{'mbflows'}->Menu(-tearoff => 0));
+   $tx{'mflows'}->command(-label => 'New', -command => \&editflow);
+   $tx{'edflows'} = $tx{'mflows'}->Cascade(-label => 'Edit', -tearoff => 0);
+   $tx{'delflows'} = $tx{'mflows'}->Cascade(-label => 'Delete', -tearoff => 0);
+   $tx{'mflows'}->separator;
+   $tx{'mflows'}->command(-label => 'Delete all', -command => \&delall);
+   $fr = $mw->Frame();
+   $fr->grid(-row => 1, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'Start')->grid(-row => 0, -column => 0);
+   $fr->Radiobutton(-text => 'Now',
+                    -command => sub { $tx{'unsaved'} = 1; },
+                    -variable => \$tx{'start'},
+                    -value => 'NOW')->grid(-row => 0, -column => 1);
+   $fr->Radiobutton(-text => 'At',
+                    -command => sub { $tx{'unsaved'} = 1; },
+                    -variable => \$tx{'start'},
+                    -value => 'AT')->grid(-row => 0, -column => 2);
+   $tx{'starth'} = '00';
+   $tx{'startm'} = '00';
+   $tx{'starts'} = '00';
+   $fr->Entry(-textvariable => \$tx{'starth'},
+              -validate => 'all',
+              -vcmd => sub { if ($_[4] >= 0) {
+                                $tx{'unsaved'} = 1;
+                                $tx{'start'} = 'AT';
+                             }
+                             $_[0] =~ /^\d\d$end/ and $_[0] < 24
+                                or $_[4] == 0
+                                or $_[4] == 1 and $_[0] =~ /^\d$end/ },
+              -invcmd => sub {
+                            if ($_[4] < 0) {
+                               $_[0] =~ /(\d?)(\d?)/;
+                               if ($1 eq '') {
+                                  $tx{'starth'} = '00';
+                               } elsif ($2 eq '') {
+                                  $tx{'starth'} = "0$1";
+                               }
+                            }
+                         },
+              -width => 2)->grid(-row => 0, -column => 3);
+   $fr->Label(-text => ':')->grid(-row => 0, -column => 4);
+   $fr->Entry(-textvariable => \$tx{'startm'},
+              -validate => 'all',
+              -vcmd => sub { if ($_[4] >= 0) {
+                                $tx{'unsaved'} = 1;
+                                $tx{'start'} = 'AT';
+                             }
+                             $_[0] =~ /^\d\d$end/ and $_[0] < 60
+                                or $_[4] == 0
+                                or $_[4] == 1 and $_[0] =~ /^\d$end/ },
+              -invcmd => sub {
+                            if ($_[4] < 0) {
+                               $_[0] =~ /(\d?)(\d?)/;
+                               if ($1 eq '') {
+                                  $tx{'startm'} = '00';
+                               } elsif ($2 eq '') {
+                                  $tx{'startm'} = "0$1";
+                               }
+                            }
+                         },
+              -width => 2)->grid(-row => 0, -column => 5);
+   $fr->Label(-text => ':')->grid(-row => 0, -column => 6);
+   $fr->Entry(-textvariable => \$tx{'starts'},
+              -validate => 'all',
+              -vcmd => sub { if ($_[4] >= 0) {
+                                $tx{'unsaved'} = 1;
+                                $tx{'start'} = 'AT';
+                             }
+                             $_[0] =~ /^\d\d$end/ and $_[0] < 60
+                                or $_[4] == 0
+                                or $_[4] == 1 and $_[0] =~ /^\d$end/ },
+              -invcmd => sub {
+                            if ($_[4] < 0) {
+                               $_[0] =~ /(\d?)(\d?)/;
+                               if ($1 eq '') {
+                                  $tx{'starts'} = '00';
+                               } elsif ($2 eq '') {
+                                  $tx{'starts'} = "0$1";
+                               }
+                            }
+                         },
+              -width => 2)->grid(-row => 0, -column => 7);
+   $tx{'start'} = 'NOW';
+   $fr = $mw->Frame();
+   $fr->grid(-row => 2, -column => 0, -padx => 5, -pady => 5);
+   $fr->Checkbutton(-text => 'Soft real-time priority',
+                    -command => sub { $tx{'unsaved'} = 1; },
+                    -variable => \$tx{'srt'})->grid(-row => 0, -column => 0);
+   $tx{'srtprio'} = 50;
+   $fr->Entry(-width => 3,
+              -validate => 'all',
+              -vcmd => sub { if ($_[4] >= 0) {
+                                $tx{'unsaved'} = 1;
+                                $tx{'srt'} = 1;
+                             }
+                             $_[0] =~ /^\d{1,2}$end/ and $_[0] >= 1 and $_[0] <= 60
+                                or $_[4] == 0
+                                or $_[4] == 1 and $_[0] =~ /^\d$end/ },
+              -invcmd => sub { if ($_[4] < 0) {
+                                  $tx{'srtprio'} = 50;   # default
+                                  $tx{'srt'} = 0; } },
+              -textvariable => \$tx{'srtprio'})->grid(-row => 0, -column =>1);
+   $tx{'srt'} = 0;
+   $fr = $mw->Frame();
+   $fr->grid(-row => 3, -column => 0, -padx => 5, -pady => 5);
+   $fr->Button(-text => 'Start', -command => \&launch_rude
+              )->grid(-row => 0, -column =>0, -padx => 3);
+   $fr->gridColumnconfigure(1, -minsize => 20);
+   $fr->Button(-text => 'Cancel',
+               -command => sub { main() if !unsaved_changes(); }
+              )->grid(-row => 0, -column =>2, -padx => 3);
+   $mw->update;
+   $mw->geometry($mw->reqwidth() . 'x' . $mw->reqheight());
+   $tx{'unsaved'} = 0;
+   if (defined $argfile) {
+      open_file($argfile);
+      undef $argfile;
+   }
+}
+
+
+sub collector {
+   foreach $widget ($mw->children) { $widget->destroy }
+   my $fr = $mw->Frame();
+   $fr->grid(-row => 0, -column => 0, -padx => 5, -pady => 5);
+   $fr->Label(-text => 'Mode')->grid(-row => 0, -column => 0, -rowspan => 3);
+   $coll{'mode'} = 'stats';
+   $fr->Radiobutton(-text => 'Normal', -variable => \$coll{'mode'},
+                    -value =>'normal', -command => \&collmode
+                   )->grid(-row => 0, -column => 1, -sticky => 'w');
+   $fr->Radiobutton(-text => 'Statistics only', -variable => \$coll{'mode'},
+                    -value =>'stats', -command => \&collmode
+                   )->grid(-row => 1, -column => 1, -sticky => 'w');
+   $fr->Radiobutton(-text => 'Log to file', -variable => \$coll{mode},
+                    -value =>'log', -command => \&collmode
+                   )->grid(-row => 2, -column => 1, -sticky => 'w');
+   $fr->gridColumnconfigure(2, -minsize => 20);
+   $coll{'bstart'} = $fr->Button(-text => 'Start', -command => \&launch_crude);
+   $coll{'bstart'}->grid(-row => 0, -column => 3, -rowspan => 3,
+                         -padx => 5, -pady => 5);
+   $coll{'bcancel'} = $fr->Button(-text => 'Cancel', -command => \&main);
+   $coll{'bcancel'}->grid(-row => 0, -column => 4, -rowspan => 3,
+                          -padx => 5, -pady => 5);
+   $fr = $mw->Frame();
+   $fr->grid(-row => 1, -column => 0, -padx => 5, -pady => 5);
+   $coll{'rbip'} = 'any';
+   $fr->Label(-text => 'IP')->grid(-row => 0, -column => 0, -rowspan => 2);
+   $fr->Radiobutton(-text => 'Any', -variable => \$coll{'rbip'}, -value =>'any'
+                   )->grid(-row => 0, -column => 1, -columnspan => 2,
+                           -sticky => 'w');
+   $fr->Radiobutton(-text => 'Use', -variable => \$coll{'rbip'}, -value =>'use'
+                   )->grid(-row => 1, -column => 1, -sticky => 'w');
+   $coll{'ip'} = '';
+   $fr->Entry(-width => 16, -textvariable => \$coll{'ip'}
+             )->grid(-row => 1, -column => 2, -padx => 5);
+   $fr->gridColumnconfigure(3, -minsize => 15);
+   $fr->Label(-text => 'Port')->grid(-row => 0, -column => 4, -rowspan => 2,
+                                     -padx => 5, -sticky => 'e');
+   $coll{'port'} = '10001';
+   $fr->Entry(-width => 6, -textvariable => \$coll{'port'}
+             )->grid(-row => 0, -column => 5, -rowspan => 2, -sticky => 'w');
+   $fr = $mw->Frame();
+   $fr->grid(-row => 2, -column => 0);
+   my $collfr = $fr;
+   $coll{'labtext'} = 'Flows';
+   my $colllab = $fr->Label(-textvariable => \$coll{'labtext'});
+   $colllab->grid(-row => 0, -column => 0, -padx => 5, -pady => 5,
+                  -sticky => 'e');
+   $coll{'enttext'} = '';
+   $coll{'file'} = '';
+   $coll{'flows'} = '';
+   $coll{'collent'} = $fr->Entry(-width => 32,
+                                 -textvariable => \$coll{'flows'});
+   $coll{'collent'}->grid(-row => 0, -column => 1, -sticky => 'w');
+   $coll{'collbut'} = $fr->Button(-text => 'Select', -state => 'disabled',
+      -command => sub { $coll{'file'} = 
+                           $mw->FileSelect(-directory => '.',
+                                           -title => 'Log file')->Show }
+                                 );
+   $coll{'collbut'}->grid(-row => 0, -column => 2, -padx => 5, -pady => 5);
+   $fr = $mw->Frame();
+   $fr->grid(-row => 3, -column => 0, -padx => 25, -sticky => 'w');
+   $coll{'srt'} = 0;
+   $fr->Checkbutton(-text => 'Soft real-time priority',
+                    -variable => \$coll{'srt'}
+                   )->grid(-row => 0, -column => 0,
+                           -padx => 5, -pady => 5, -sticky => 'w');
+   $coll{'srtprio'} = '50';
+   $fr->Entry(-width => 3, -textvariable => \$coll{'srtprio'}
+             )->grid(-row => 0, -column => 1, -sticky => 'w');
+   $fr = $mw->Frame();
+   $fr->grid(-row => 4, -column => 0, -padx => 25, -sticky => 'w');
+   $coll{'npkts'} = 0;
+   $fr->Checkbutton(-text => 'Capture only',
+                    -variable => \$coll{'npkts'}
+                   )->grid(-row => 0, -column => 0, -columnspan => 2,
+                           -padx => 5, -pady => 5, -sticky => 'w');
+   $coll{'pkts'} = '';
+   $fr->Entry(-width => 10, -textvariable => \$coll{'pkts'}
+             )->grid(-row => 0, -column => 2, -sticky => 'w', -columnspan => 2);
+   $fr->Label(-text => 'packets'
+             )->grid(-row => 0, -column => 4, -padx => 5, -sticky => 'w');
+   $mw->update;
+   $collfr->gridColumnconfigure(0, -minsize => $colllab->width + 10);
+   # 10 = 5 xpad on both sides
+   $mw->update;
+   $mw->geometry($mw->reqwidth() . 'x' . $mw->reqheight());
+}
+
+
+sub collmode {
+   if ($coll{'mode'} eq 'normal') {
+      $coll{'labtext'} = '-';
+      $coll{'collent'}->configure(-textvariable => \$coll{'enttext'});
+      $coll{'collent'}->configure(-state => 'disabled');
+      $coll{'collbut'}->configure(-state => 'disabled');
+   } elsif ($coll{'mode'} eq 'stats') {
+      $coll{'labtext'} = 'Flows';
+      $coll{'collent'}->configure(-textvariable => \$coll{'flows'});
+      $coll{'collent'}->configure(-state => 'normal');
+      $coll{'collbut'}->configure(-state => 'disabled');
+   } elsif ($coll{'mode'} eq 'log') {
+      $coll{'labtext'} = 'File';
+      $coll{'collent'}->configure(-textvariable => \$coll{'file'});
+      $coll{'collent'}->configure(-state => 'normal');
+      $coll{'collbut'}->configure(-state => 'normal');
+   } else { print STDERR "Bad option in collmode\n";
+   }
+}
+
+
+sub valid_ip {
+   my ($ip) = @_;
+   my @octets = split (/\./, $ip);
+   my $octet;
+   return 0 if @octets != 4;
+   foreach $octet (@octets) {
+      return 0 if ($octet !~ /\d{1,3}/ || $octet > 255);
+   }
+   return 1;
+}
+
+
+sub launch_crude {
+   my $cmdline;
+   $coll{'bstart'}->configure(-state => 'disabled');
+   $coll{'bcancel'}->configure(-state => 'disabled');
+   # Common validation
+   if ($coll{'rbip'} eq 'use' && !valid_ip($coll{'ip'})) {
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Please use a valid IP or choose \'Any\'.',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      goto GOBACK;
+   }
+   if ($coll{'port'} !~ s/^\s*(\d+)\s*$end/$1/ or $coll{'port'} > 65535) {
+      $mw->Dialog(-title => 'Warning',
+         -text => "Port must be a number <= 65535\nDefault port is 10001",
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      goto GOBACK;
+   }
+   if ($coll{'srt'} &&
+         ($coll{'srtprio'} !~ s/^\s*(\d+)\s*$end/$1/ or $coll{'srtprio'} > 90
+          or $coll{'srtprio'} == 0)) {
+      $mw->Dialog(-title => 'Warning',
+         -text => "Soft real-time priority must be in range 1-90\nDefault value is 50",
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      goto GOBACK;
+   }
+   if ($coll{'npkts'} &&
+         ($coll{'pkts'} !~ s/^\s*(\d+)\s*$end/$1/ or $coll{'pkts'} == 0)) {
+      $mw->Dialog(-title => 'Warning',
+         -text => "Please specify a valid number of packets to capture",
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      goto GOBACK;
+   }
+   # Mode-specific validation
+   if ($coll{'mode'} eq 'normal') {
+      $cmdline = "crude";
+   } elsif ($coll{'mode'} eq 'stats') {
+      my $flows = '';
+      foreach (split (/[,;]/, $coll{'flows'})) {
+         if (! /^\s*(\d+)\s*$end/) {
+            $mw->Dialog(-title => 'Warning',
+                        -text => 'Please use a comma-separated list of flows.',
+                        -bitmap => 'warning',
+                        -buttons => ['Dismiss'])->Show;
+            goto GOBACK;
+         } else {
+            $flows .= "$1\,";
+         }
+      }
+      chop ($flows);
+      if ("$flows" eq '') {
+         $mw->Dialog(-title => 'Warning',
+                     -text => 'List of flows must not be empty!',
+                     -bitmap => 'warning',
+                     -buttons => ['Dismiss'])->Show;
+         goto GOBACK;
+      }
+      $cmdline = "crude -s $flows";
+   } elsif ($coll{'mode'} eq 'log') {
+      if (-e $coll{'file'}) { 
+         my $option = $mw->Dialog(-title => 'Warning',
+            -text => 'Warning: Log file already exists!',
+            -bitmap => 'warning',
+            -buttons => ['Overwrite', 'Cancel'])->Show;
+         goto GOBACK if ($option eq 'Cancel');
+      }
+      $cmdline = "crude -l $coll{'file'}";
+   } else {
+      print STDERR "Bad option in launch_crude\n";
+   }
+   $cmdline .= " -p $coll{'port'}";
+   $cmdline .= " -i $coll{'ip'}" if ($coll{'rbip'} eq 'use');
+   $cmdline .= " -P $coll{'srtprio'}" if ($coll{'srt'});
+   $cmdline .= " -n $coll{'pkts'}" if ($coll{'npkts'});
+   launch($cmdline);
+
+   $coll{'bstart'}->configure(-state => 'normal');
+   $coll{'bcancel'}->configure(-state => 'normal');
+   return;
+   GOBACK:
+   # Won't get here unless by a goto
+   $coll{'bstart'}->configure(-state => 'normal');
+   $coll{'bcancel'}->configure(-state => 'normal');
+}
+
+
+sub launch {
+   my $command = $_[0];
+   my $errw = $mw->Toplevel(-title => 'Output');
+   $errw->grab;
+   # No problem with grab because we're always called from the main window
+   my $errt = $errw->Scrolled('Text', -scrollbars => 'osoe', -wrap => 'none');
+   $errt->pack(-expand => 1, -fill => 'both', -padx => 3, -pady => 3);
+   tie(*ERROUT, 'Tk::Text', $errt);
+   my $pid;
+   my $errb = $errw->Button(-text => 'Stop',
+                            -command => sub {kill('SIGINT', $pid)});
+   $errb->pack(-pady => 3);
+   my $fgcolor = $errt->cget('foreground');
+   $errt->tagConfigure('hilight', -foreground => 'red');
+   $pid = open3(*IN, *OUT, *ERR, $command);
+   close(IN);
+   $errw->update; # Update only after launching the command
+   my $errors = 0;
+   my $selector = IO::Select->new();
+   $selector->add(*OUT, *ERR);
+   my $err;
+   my $pos;
+   my @ready;
+   for (;;) {
+      @ready = $selector->can_read(1);
+      foreach $fh (@ready) {
+         if (fileno($fh) == fileno(ERR) && ($err = <ERR>)) {
+            $pos = $errt->index('insert');
+            print ERROUT $err;
+            $errt->tagAdd('hilight', $pos, 'insert');
+            $errors = 1;
+         } else {
+            print ERROUT scalar <OUT>;
+         }
+         if (eof($fh)) {
+            $selector->remove($fh);
+            goto OUTAHERE if ($selector->count() == 0);
+         }
+      }
+      $mw->update;
+   }
+   OUTAHERE:
+   close(OUT);
+   close(ERR);
+   close(OUTFILE);
+   waitpid($pid, 0);
+   if (!$errors) { 
+      print ERROUT "No errors.\n";
+   }
+   $errt->configure(-state => 'disabled');
+   $errb->configure(-text => 'Dismiss', -command => sub {$errw->destroy;});
+}
+
+
+sub decoder {
+   foreach $widget ($mw->children) { $widget->destroy }
+   $fchoice = $mw->Frame;
+   $choice = 'plaintext';
+   $fchoice->Radiobutton(-text => 'Plain text',
+                         -variable => \$choice,
+                         -value => 'plaintext')->grid(-sticky => 'w');
+   $fchoice->Radiobutton(-text => 'CSV',
+                         -variable => \$choice,
+                         -value => 'csv')->grid(-sticky => 'w');
+   $fchoice->grid(-padx => 20, -pady => 5);
+   $mw->Entry(-textvariable => \$srcfile)->grid(-sticky => 'ew', -padx => 5);
+   $fsb = $mw->Frame;
+   $fsb->Button(-text => 'Select Src',
+               -command => sub {$srcfile = $mw->FileSelect(-directory => '.',
+                  -title => 'Source file')->Show}
+               )->grid(-row => 0, -column => 0, -padx => 5, -pady => 5);
+   $fsb->grid();
+   $mw->Entry(-textvariable => \$decfile)->grid(-sticky => 'ew', -padx => 5);
+   $fb = $mw->Frame;
+   $fb->Button(-text => 'Select Dst',
+               -command => sub {$decfile = $mw->FileSelect(-directory => '.',
+                  -title => 'Destination file')->Show}
+              )->grid(-row => 0, -column => 0, -padx => 5, -pady => 5);
+   $fb->Button(-text => 'Start',
+               -command => [\&do_decode, \$choice, \$srcfile,
+                            \$decfile])->grid(-row => 0, -column => 1,
+                                              -padx => 5, -pady => 5);
+   $fb->Button(-text => 'Cancel',
+               -command => \&main)->grid(-row => 0, -column => 2,
+                  -padx => 5, -pady => 5);
+   $fb->grid();
+   $mw->update;
+   $mw->geometry($mw->reqwidth() . 'x' . $mw->reqheight());
+}
+
+
+sub do_decode {
+   my $choice = ${$_[0]};
+   my $src = ${$_[1]};
+   my $dst = ${$_[2]};
+   my $process = "process_$choice";
+   $process = \&$process;
+   if (! $src || ! $dst) { 
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Please select source and destination files.',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return }
+   if (! -e "$src") { 
+      $mw->Dialog(-title => 'Warning',
+         -text => 'Warning: source file does not exist!',
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return }
+   if (-e "$dst") { 
+      my $option = $mw->Dialog(-title => 'Warning',
+         -text => 'Warning: destination file already exists!',
+         -bitmap => 'warning',
+         -buttons => ['Overwrite', 'Cancel'])->Show;
+      return if ($option eq 'Cancel')}
+   if (! open(OUTFILE, ">$dst")) {
+      $mw->Dialog(-title => 'Error',
+         -text => 'Can\'t open file for writing:' . "\n$!\n",
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return }
+   $errw = $mw->Toplevel(-title => 'Errors');
+   $errw->grab;
+   my $errt = $errw->Scrolled('Text', -scrollbars => 'osoe', -wrap => 'none');
+   $errt->pack(-expand => 1, -fill => 'both', -padx => 3, -pady => 3);
+   tie(*ERROUT, 'Tk::Text', $errt);
+   my $errb = $errw->Button(-text => 'Dismiss', -state => 'disabled',
+                            -command => sub {$errw->destroy; main()});
+   $errb->pack(-pady => 3);
+   $errw->update;
+   if ($choice eq "csv") {
+      print OUTFILE "ID,SEQ,SRC_IP,SRC_PRT,DST_IP,DST_PRT,Tx,Rx,SIZE\n"}
+   my $pid = open3(*IN, *OUT, *ERR, "crude -d $src");
+   close(IN);
+   my $errors = 0;
+   my $selector = IO::Select->new();
+   $selector->add(*OUT, *ERR);
+   my $err;
+   while (@ready = $selector->can_read) {
+      foreach $fh (@ready) {
+         if (fileno($fh) == fileno(ERR) && ($err = <ERR>)) {
+            print ERROUT scalar $err;
+            $errors = 1;
+         } else {
+            print OUTFILE &$process(scalar <OUT>);
+         }
+         $selector->remove($fh) if eof($fh);
+      }
+      $mw->update;
+   }
+   close(OUT);
+   close(ERR);
+   close(OUTFILE);
+   waitpid($pid, 0);
+   if (!$errors) { 
+      print ERROUT "No errors.\n";
+   }
+   $errt->configure(-state => 'disabled');
+   $errb->configure(-state => 'normal');
+}
+
+
+sub process_plaintext {
+   my $str = shift;
+   $str =~ s/^[^I].*//s;
+   return $str;
+}
+
+sub process_csv {
+   my $str = shift;
+   if ($str =~ s/^ID=(.*) SEQ=(.*) SRC=(.*):(.*) DST=(.*):(.*) Tx=(.*) Rx=(.*) SIZE=(.*)/$1,$2,$3,$4,$5,$6,$7,$8,$9/s) {
+      return $str}
+   return '';
+}
+
+
+sub save {
+   my ($confname, $auxname, $traceprefix);
+   if (defined $_[0]) {
+      #print "save: \$_[0] = $_[0]\n";
+      $confname = $_[0];
+      $auxname = $_[0].'-aux';
+      $traceprefix = $_[0];
+   } else {
+      $confname = 'config';
+      $auxname = 'aux';
+      $traceprefix = 'trace';
+   }
+   if (! open(CONF, ">$confname")) {
+      $mw->Dialog(-title => 'Error',
+         -text => "Can\'t open file $confname for writing:" . "\n$!\n",
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   print CONF "## This file was generated automatically\n\n";
+   if ($tx{'start'} eq 'NOW') {
+      print CONF "START NOW\n\n";
+   } else {
+      printf CONF "START %02d:%02d:%02d\n\n", $tx{'starth'}, $tx{'startm'},
+         $tx{'starts'};
+   }
+   my $flows = $fled{'flows'};
+   my ($flow, $mod, $type);
+   foreach $id (sort { $a <=> $b } keys %{$flows}) {
+      print CONF "## Flow $id\n";
+      $flow = $$flows{$id};
+      $mod = ${$$flow{'mods'}}{'initial'};
+      $type = ${${$$flow{'mods'}}{'initial'}}{'type'};
+      print CONF "$$flow{'tstart'} $id ON $$flow{'sport'} $$flow{'daddr'}:".
+                 "$$flow{'dport'} ";
+      if ($type eq 'CONSTANT') {
+         print CONF "CONSTANT $$mod{'rate'} $$mod{'size'}\n";
+      } elsif ($type eq 'TRACE') {
+         if (! open(TRACE, ">$traceprefix-$id-initial")) {
+            $mw->Dialog(-title => 'Error',
+               -text => "Can\'t open file $traceprefix-$id-initial for ".
+                        "writing:\n$!\n",
+               -bitmap => 'warning',
+               -buttons => ['Dismiss'])->Show;
+            close(CONF);
+            return 0;
+         }
+         my $i = 0;
+         foreach (@{$$mod{'trace'}}) {
+            if ($i % 2) {
+               printf TRACE "%1.06f\n", $_;
+            } else {
+               print TRACE "$_ ";
+            }
+            $i++;
+         }
+         close(TRACE);
+         print CONF "TRACE $traceprefix-$id-initial\n";
+      } elsif ($type eq 'SILENT') {
+         # Arbitrary size, since no packets will be sent
+         print CONF "CONSTANT 0 64\n";
+      } else {
+         print STDERR "Bad flow type.\n";
+      }
+      if ($$flow{'settos'}) {
+         print CONF "TOS $id $$flow{'tos'}\n";
+      }
+      foreach $modid (sort modsort keys %{$$flow{'mods'}}) {
+         next if $modid eq 'initial';
+         $mod = ${$$flow{'mods'}}{$modid};
+         $type = $$mod{'type'};
+         if ($type eq 'CONSTANT') {
+            print CONF "$modid $id MODIFY CONSTANT $$mod{'rate'} $$mod{'size'}\n";
+         } elsif ($type eq 'TRACE') {
+            if (! open(TRACE, ">$traceprefix-$id-$modid")) {
+               $mw->Dialog(-title => 'Error',
+                  -text => "Can\'t open file $traceprefix-$id-$modid for ".
+                           "writing:\n$!\n",
+                  -bitmap => 'warning',
+                  -buttons => ['Dismiss'])->Show;
+               close CONF;
+               return 0;
+            }
+            my $i = 0;
+            foreach (@{$$mod{'trace'}}) {
+               if ($i % 2) {
+                  printf TRACE "%1.06f\n", $_;
+               } else {
+                  print TRACE "$_ ";
+               }
+               $i++;
+            }
+            close TRACE;
+            print CONF "$modid $id MODIFY TRACE $traceprefix-$id-$modid\n";
+         } elsif ($type eq 'SILENT') {
+            # Arbitrary size, since no packets will be sent
+            print CONF "$modid $id MODIFY CONSTANT 0 64\n";
+         } else {
+            print STDERR "Bad mod type.\n";
+         }
+      }
+      print CONF "$$flow{'tstop'} $id OFF\n\n";
+   }
+   close CONF;
+   if (! open(AUX, ">$auxname")) {
+      $mw->Dialog(-title => 'Error',
+         -text => "Can\'t open file $auxname for writing:" . "\n$!\n",
+         -bitmap => 'warning',
+         -buttons => ['Dismiss'])->Show;
+      return 0;
+   }
+   print AUX "VERSION $version\n";
+   print AUX 'SRTPRIO ' . ($tx{'srt'} ? $tx{'srtprio'} : 'NO') . "\n";
+   close AUX;
+   return 1;
+}
+
+
+sub save_file {
+   return 0 if ! valid_txparms();
+   my $olddir = cwd;
+   my $erro;
+   my $tmpdir = tempdir(CLEANUP => 1);
+   unless (defined $tmpdir) {
+      $erro = 'Can\'t create temporary directory';
+      goto ERRO;
+   }
+   unless (chdir($tmpdir)) {
+      $erro = 'Can\'t chdir to temporary directory';
+      goto ERRO;
+   }
+   unless (save) {
+      $erro = 'Can\'t save file components';
+      goto ERRO;
+   }
+   if (system('tar c * | gzip -c > archive') != 0) {
+      $erro = 'Can\'t create compressed file';
+      goto ERRO;
+   }
+   chdir($olddir);
+   my $file;
+   if (defined $_[0]) {
+      $file = $_[0];
+   } else {
+      # This would be better, but it's way too buggy...
+      #$file = $mw->getSaveFile(
+      #    -filetypes => [['Grude files','.grd'],['All files','*']],
+      #    -defaultextension => '.grd',
+      #    -initialdir => '.');
+      #return 0 if (!defined $file or $file eq '');
+      # The ugly way:
+      $file = $mw->FileSelect(-directory => '.',
+                              -defaultextension => 'grd',
+                              -title => 'Save as')->Show;
+      return 0 if (!defined $file or $file eq '');
+      $file =~ s/(\.grd)?\s*$end/.grd/i;
+      if (-e $file) {
+         my $option = $mw->Dialog(-title => 'Warning',
+            -text => "Warning: $file already exists!",
+            -bitmap => 'warning',
+            -buttons => ['Overwrite', 'Cancel'],
+            -default_button => 'Cancel')->Show;
+         unless ($option eq 'Overwrite') {
+            rmtree($tmpdir);
+            return 0;
+         }
+      }
+   }
+   if (!move("$tmpdir/archive", $file)) {
+      $erro = "Can't save file $file";
+      goto ERRO;
+   }
+   rmtree($tmpdir);
+   $tx{'file'} = $file;
+   $tx{'unsaved'} = 0;
+   return 1;
+ERRO:
+   chdir($olddir);
+   rmtree($tmpdir);
+   $mw->Dialog(-title => 'Error',
+      -text => $erro,
+      -bitmap => 'error',
+      -buttons => ['Dismiss'])->Show;
+   return 0;
+}
+
+
+sub unsaved_changes {
+   return 0 if !$tx{'unsaved'};
+   my $option = $mw->Dialog(-title => 'Warning',
+      -text => 'There are unsaved changes',
+      -bitmap => 'warning',
+      -buttons => ['Save', 'Don\'t save', 'Cancel'])->Show;
+   return 0 if $option eq 'Don\'t save';
+   save_file($tx{'file'}) if $option eq 'Save';
+   return 1;
+}
+
+
+sub reset_txconf {
+   my $index;
+   $index = $tx{'edflows'}->menu->index('last');
+   $tx{'edflows'}->menu->delete (0, $index) if $index ne 'none';
+   $index = $tx{'delflows'}->menu->index('last');
+   $tx{'delflows'}->menu->delete (0, $index) if $index ne 'none';
+   return if unsaved_changes();
+   $tx{'srt'} = 0;
+   $tx{'srtprio'} = 50;
+   $tx{'start'} = 'NOW';
+   $tx{'starth'} = '00';
+   $tx{'startm'} = '00';
+   $tx{'starts'} = '00';
+   $fled{'flows'} = {};
+   undef $tx{'file'};
+   $tx{'unsaved'} = 0;
+}
+
+
+sub open_file {
+   return if unsaved_changes();
+   my $file;
+   if (defined $_[0]) {
+      $file = $_[0];
+      if (!-r $file or -d $file) {
+         $mw->Dialog(-title => 'Error',
+            -text => "File $file does not exist, is not readable or is a directory.",
+            -bitmap => 'error',
+            -buttons => ['Dismiss'])->Show;
+         return 0;
+      }
+   } else {
+      $file = $mw->FileSelect(-directory => '.',
+                              -defaultextension => 'grd',
+                              -title => 'Open',
+                              -verify => [ '-r', '!-d' ])->Show;
+      return 0 if !defined $file or $file eq '';
+   }
+   my $erro;
+   my $tmpdir = tempdir(CLEANUP => 1);
+   unless (defined $tmpdir) {
+      $erro = 'Can\'t create temporary directory';
+      goto ERRO;
+   }
+   if (system("tar xfz $file -C $tmpdir") != 0) {
+      $erro = 'Can\'t uncompress file to temporary directory';
+      goto ERRO;
+   }
+   $tx{'unsaved'} = 0;
+   reset_txconf();
+   # Do the parsing
+   unless (open(AUX, "$tmpdir/aux")) {
+      $erro = 'Can\'t read aux parameters';
+      goto ERRO;
+   }
+   while (<AUX>) {
+      chomp;
+      if (/^\s*VERSION\s+(\S+)\s*$end/) {
+         my $filever = $1;
+         if ($filever ne $version) {
+            $erro = "Can't open version $filever files";
+            goto ERRO;
+         }
+      } elsif (/^\s*SRTPRIO\s+(\S+)\s*$end/) {
+         if ("$1" ne 'NO') {
+            $tx{'srt'} = 1;
+            $tx{'srtprio'} = $1;
+         }
+      }
+   }
+   close(AUX);
+   unless (open(CONFIG, "$tmpdir/config")) {
+      $erro = 'Can\'t read config parameters';
+      goto ERRO;
+   }
+   my ($flow, $start, $stime, $otime,  $id, $sport, $daddr, $dport, $type,
+       $parms, $rate, $size, $tracefile, $mtime);
+   while (<CONFIG>) {
+      chomp;
+      if (/^\s*(\S+)\s+(\S+)\s+ON\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*(.*)/) {
+         $stime = $1;
+         $id = $2;
+         $sport = $3;
+         $daddr = $4;
+         $dport = $5;
+         $type = $6;
+         $parms = $7;
+         # print "$stime | $id | $sport | $daddr | $dport | $type | $parms\n";
+         $flow = +{ 'tstart' => $stime, 'daddr' => $daddr, 'dport' => $dport,
+                    'sport' => $sport, 'settos' => 0, 'tos' => 0 };
+         if ($type eq 'CONSTANT') {
+            ($rate, $size) = split(/\s+/, $parms, 2);
+            if ($rate == 0) {
+               $$flow{'mods'} = +{'initial' => {'type' => 'SILENT'}};
+            } else {
+               $$flow{'mods'} = +{ 'initial' => { 'type' => $type,
+                                                  'rate' => $rate,
+                                                  'size' => $size } };
+            }
+         } elsif ($type eq 'TRACE') {
+            $parms =~ s/\s*$end//;
+            $tracefile = "$tmpdir/$parms";
+            $$flow{'mods'} =
+              +{ 'initial' =>
+                  { 'type' => $type,
+                    'trace' => parse_trace($tracefile, $id, 'initial') } };
+         }
+         ${$fled{'flows'}}{$id} = $flow;
+      } elsif (/^\s*(\S+)\s+(\S+)\s+MODIFY\s+(\S+)\s*(.*)/) {
+         $mtime = $1;
+         $id = $2;
+         $type = $3;
+         $parms = $4;
+         if ($type eq 'CONSTANT') {
+            ($rate, $size) = split(/\s+/, $parms, 2);
+            if ($rate == 0) {
+               ${${${$fled{'flows'}}{$id}}{'mods'}}{$mtime} =
+                  {'type' => 'SILENT'}
+            } else {
+               ${${${$fled{'flows'}}{$id}}{'mods'}}{$mtime} =
+                  {'type' => $type, 'rate' => $rate, 'size' => $size};
+            }
+         } elsif ($type eq 'TRACE') {
+            $parms =~ s/\s*$end//;
+            $tracefile = "$tmpdir/$parms";
+            ${${${$fled{'flows'}}{$id}}{'mods'}}{$mtime} =
+               +{ 'type' => $type,
+                  'trace' => parse_trace($tracefile, $id, $mtime) };
+         }
+      } elsif (/^\s*(\S+)\s+(\S+)\s+OFF\s*$end/) {
+         $otime = $1;
+         $id = $2;
+         ${${$fled{'flows'}}{$id}}{'tstop'} = $otime;
+      } elsif (/^\s*TOS\s+(\S+)\s+(\S+)\s*$end/) {
+         $id = $1;
+         $tos = $2;
+         ${${$fled{'flows'}}{$id}}{'settos'} = 1;
+         ${${$fled{'flows'}}{$id}}{'tos'} = $tos;
+      } elsif (/^\s*START\s+(\S+)\s*$end/) {
+         if ("$1" ne 'NOW') {
+            $start = $1;
+            $tx{'start'} = 'AT';
+            ($tx{'starth'}, $tx{'startm'}, $tx{'starts'}) =
+               split (/:/, $start, 3);
+         }
+      }
+   }
+   close(CONFIG);
+   my $index = 0;
+   foreach $id (sort { $a <=> $b } keys %{$fled{'flows'}}) {
+      $tx{'edflows'}->menu->insert($index, 'command', -label => $id,
+                                   -command => [\&editflow, $id]);
+      $tx{'delflows'}->menu->insert($index, 'command', -label => $id,
+                                    -command => [\&delflow, $id]);
+      $index++;
+   }
+   $tx{'file'} = $file;
+   $tx{'unsaved'} = 0;
+   rmtree($tmpdir);
+   return 1;
+ERRO:
+   rmtree($tmpdir);
+   $mw->Dialog(-title => 'Error',
+      -text => $erro,
+      -bitmap => 'error',
+      -buttons => ['Dismiss'])->Show;
+   return 0;
+}
+
+
+sub parse_trace {
+   my ($tracefile, $id, $mtime) = @_;
+   my @trace = ();
+   unless (open(TRACE, $tracefile)) {
+      $erro = "Can\'t read trace for flow $id at time $mtime";
+      goto ERRO;
+   }
+   my ($size, $wait);
+   while (<TRACE>) {
+      chomp;
+      if (/^\s*(\S+)\s+(\S+)\s*$end/) {
+         $size = $1;
+         $wait = $2;
+         push(@trace, ($size, $wait));
+      }
+   }
+   close(TRACE);
+   return \@trace;
+ERRO:
+   $mw->Dialog(-title => 'Error',
+      -text => $erro,
+      -bitmap => 'error',
+      -buttons => ['Dismiss'])->Show;
+   return undef;
+}
+
+
+sub launch_rude {
+   return if ! valid_txparms();
+   my $olddir = cwd;
+   my $erro;
+   my $tmpdir = tempdir(CLEANUP => 1);
+   unless (defined $tmpdir) {
+      $erro = 'Can\'t create temporary directory';
+      goto ERRO;
+   }
+   unless (chdir($tmpdir)) {
+      $erro = 'Can\'t chdir to temporary directory';
+      goto ERRO;
+   }
+   unless (save) {
+      $erro = 'Can\'t save temporary configuration files';
+      goto ERRO;
+   }
+   my $command = 'rude -s config';
+   $command .= " -P $tx{'srtprio'}" if $tx{'srt'};
+   launch($command);
+   chdir($olddir);
+   rmtree($tmpdir);
+   return;
+ERRO:
+   chdir($olddir);
+   rmtree($tmpdir);
+   $mw->Dialog(-title => 'Error',
+      -text => $erro,
+      -bitmap => 'error',
+      -buttons => ['Dismiss'])->Show;
+   return;
+}

@@ -29,6 +29,12 @@ INTRODUCTION (very short):
        for later processing. Read more from "README.crude".
 
 
+* GRUDE [Graphical RUDE]
+
+       Grude is a graphical shell for RUDE (and CRUDE), written in
+       Perl/Tk. Read more from "README.grude".
+
+
 
 COMPILATION AND INSTALLATION INSTRUCTIONS:
 ------------------------------------------

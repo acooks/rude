@@ -1,4 +1,4 @@
-CRUDE - version 0.60
+CRUDE - version 0.63
 
 -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
 
@@ -63,12 +63,12 @@ Commandline syntax:
 				default vaulue is 0, which means until
 				interrupted with CTRL+C.
 
-         -s #[,#...]             Instead of logging results to a file
-                                 calculate some statistics on-the-fly.
+	-s #[,#...]		Instead of logging results to a file
+				calculate some statistics on-the-fly.
  
-         -P <priority>           Set the process real-time priority.
-                                 Only root can do that. Be carefull -
-                                 this might lock up your computer !!!
+	-P <priority>		Set the process real-time priority.
+				Only root can do that. Be careful -
+				this might lock up your computer !!!
   
 
 -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_

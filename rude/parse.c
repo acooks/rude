@@ -180,14 +180,31 @@ void trace_parse(char *buffer, struct trace_params *par)
   unsigned int i;
   int fraglen;
   int p_size;
+  char action[11] = {0};
 
   /* Add the "ultimate" end character :) */
   time2_array[6] = '\0';
 
-  /* Get the file name and open it. Report errors */
-  if(1 != sscanf(buffer,"%*d %*d %*10s %*u %*127s %*31s %250s",target)){
-    RUDEBUG1("trace_parse() - couldn't obtain the trace file name\n");
+  /* Determine if ON or MODIFY */
+  if(1 != sscanf(buffer,"%*d %*d %10s %*s",action)){
+    RUDEBUG1("trace_parse() - couldn't obtain the action type\n");
     return;
+  }
+
+  /* Get the file name and open it. Report errors */
+  if (strncasecmp(action,"ON",2) == 0) {
+     if(1 != sscanf(buffer,"%*d %*d %*10s %*u %*127s %*31s %250s",target)){
+        RUDEBUG1("trace_parse() - couldn't obtain the trace file name\n");
+        return;
+     }
+  } else if (strncasecmp(action,"MODIFY",6) == 0) {
+     if(1 != sscanf(buffer,"%*d %*d %*10s %*31s %250s",target)){
+        RUDEBUG1("trace_parse() - couldn't obtain the trace file name\n");
+        return;
+     }
+  } else {
+     RUDEBUG1("trace_parse() - action is not ON or MODIFY\n");
+     return;
   }
   if((fptr = fopen(target,"r")) == NULL){
     RUDEBUG1("trace_parse() - fopen() failed: %s\n",strerror(errno));
@@ -466,6 +483,20 @@ int flow_modify(struct flow_cfg *target, char *buffer)
     break;
 
   case(TRACE):
+    mod->flow_id            = temp->flow_id;
+    mod->dst                = temp->dst;
+    mod->flow_sport         = temp->flow_sport;
+    mod->send_func          = send_trace;
+    mod->params.trace.ftype = typenum;
+    trace_parse(buffer, &mod->params.trace);
+    temp->mod_flow          = mod;
+    if(mod->params.trace.list_size == 0){
+      free(mod);
+      return(-4);
+    }
+    RUDEBUG7("flow_modify() - flow id=%ld modified\n",mod->flow_id);
+    break;
+
   default:
     free(mod);
     RUDEBUG1("flow_modify() - MODIFY not supported for %32s flows\n",type);

@@ -1,4 +1,4 @@
-RUDE - version 0.60
+RUDE - version 0.63
 
 -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
 
@@ -22,7 +22,7 @@ From Jargon File (4.0.0/24 July 1996) [jargon]:
 
 Commandline syntax:
 
- rude [ -h | -v | -s <script file> ] [ -p <priority level ]
+ rude [ -h | -v | -s <script file> ] [ -P <priority level ]
 
 
 	-h			Print short help.
@@ -139,6 +139,7 @@ Configuration file:
 
    * This command is valid only for the following flow type(s):
 	- CONSTANT
+	- TRACE
 
    o <mtime> = { integer } - relative time from START to this action
    o <id>    = { integer } - flow identifier
@@ -163,7 +164,7 @@ Available flow types:
    This flow simulates stream that looks like constant bitrate traffic.
    You may change the flow parameters (packet size and packet rate) with
    the MODIFY command. If the generated stream is not "stable" enough, you
-   should try to run the rude in priviledged priority (-p option).
+   should try to run the rude in priviledged priority (-P option).
 
 
  * TRACE
