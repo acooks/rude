@@ -421,7 +421,7 @@ static int make_conn(unsigned short port, char *ifaddr)
   if((ifaddr == NULL) || (strlen(ifaddr) == 0)){
     ((struct sockaddr_in*)&our_addr)->sin_addr.s_addr = htonl(INADDR_ANY);
   } else if((our_ip=inet_addr(ifaddr)) != -1){
-    ((struct sockaddr_in*)&our_addr)->sin_addr.s_addr = htonl(our_ip);
+    ((struct sockaddr_in*)&our_addr)->sin_addr.s_addr = our_ip;
   } else {
     RUDEBUG1("crude: invalid interface address %s !\n",ifaddr);
     return -1;
