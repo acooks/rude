@@ -43,7 +43,7 @@ extern struct flow_cfg *head;
 extern struct udp_data *data;
 extern char            *buffer;
 
-struct timespec pre_nano_sleep = {0,10005};//10us+5nanos...see man nanosleep 
+struct timespec pre_nano_sleep = {0,10000005};//10ms+5nanos...see man nanosleep 
 /*
  * wait_for_xmit(): Wait for certain period of time in busy-loop
  */

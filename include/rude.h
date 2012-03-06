@@ -29,11 +29,14 @@
 
 #define DNMAXLEN 128
 #define TMAXLEN  32
-#define PMINSIZE 20     /* Minimum accepted UDP-data field/packet size      */
+#define PMINSIZE 24     /* Minimum accepted UDP-data field/packet size, in previouse version it was 20      */
+#define PMINSIZE_V6 40	/* Minimum accepted UDP-data field/packet size for ipv6      */
 #define PMAXSIZE 32768  /* Maximum accepted UDP-data field/packet size      */
 #define MINDURAT 0.001  /* Minimum allowed flow duration in seconds (float) */
 
-#define VERSION "0.62"
+#define DEBUG 5
+
+#define VERSION "0.7-multicast"
 
 /*
  * Enumeration definition for different (known) flow types
@@ -51,8 +54,10 @@ typedef enum {
  */
 struct cbr_params{
   f_type ftype;                        /* Flow TRAFFIC TYPE              */
-  int    rate;                         /* Flow PACKET RATE (per second)  */
+  int    rate;                         /* Flow PACKET RATE - PACKAGE RATE per PERIOD */
   int    psize;                        /* Flow PACKET SIZE               */
+  int 	 package_size;				   /* Flow NUMBER OF PACKETS IN ONE PACKAGE*/
+  int    time_period;					   /* Flow TIME_PERIOD */		
 };
 
 /*
@@ -76,16 +81,17 @@ struct trace_params{
  * The main building block for flows
  */
 struct flow_cfg {
-  struct flow_cfg    *next;            /* Pointer to NEXT flow           */
-  struct flow_cfg    *mod_flow;        /* Next action-block for the flow */
-  struct sockaddr_in dst;              /* Destination information        */
-  int                send_sock;	       /* Socket to be used by this flow */
+  struct flow_cfg     *next;            /* Pointer to NEXT flow           */
+  struct flow_cfg     *mod_flow;        /* Next action-block for the flow */
+  struct sockaddr_storage dst;              /* Destination information        */
+  int                 send_sock;	       /* Socket to be used by this flow */
 
-  long int           flow_id;          /* Flow IDENTIFICATION number     */
-  unsigned short     flow_sport;       /* Flow SOURCE PORT number        */
-  struct timeval     flow_start;       /* Absolute flow cmd START TIME   */
-  struct timeval     flow_stop;        /* Absolute flow cmd END TIME     */
-  struct timeval     next_tx;          /* Absolute next packet TX TIME   */
+	
+  long int            flow_id;          /* Flow IDENTIFICATION number     */
+  unsigned short      flow_sport;       /* Flow SOURCE PORT number        */
+  struct timeval      flow_start;       /* Absolute flow cmd START TIME   */
+  struct timeval      flow_stop;        /* Absolute flow cmd END TIME     */
+  struct timeval      next_tx;          /* Absolute next packet TX TIME   */
 
   void (*send_func)(struct flow_cfg*); /* TX function for this flow */
 
@@ -94,7 +100,8 @@ struct flow_cfg {
   int sequence_nmbr;                   /*                   */
 
   int tos;                             /* IP TOS byte if positive */
-
+  char 				*localIf;			/* local interface to be used with multicast */	
+  char prefferedVersion; 				/*preffered ip version(4 or 6)*/
   union {
     f_type              ftype;
     struct cbr_params   cbr;
@@ -111,7 +118,7 @@ struct udp_data{
   unsigned long tx_time_seconds; 
   unsigned long tx_time_useconds; 
   unsigned long flow_id;
-  unsigned long dest_addr;
+  struct sockaddr_storage dest_addr;
 }__attribute__ ((packed));
 
 
@@ -121,9 +128,10 @@ struct udp_data{
 struct crude_struct{
   unsigned long  rx_time_seconds;
   unsigned long  rx_time_useconds;
-  unsigned long  src_addr;
+  //struct in6_addr  src_addr;
   long           pkt_size;
-  unsigned short src_port;
+  struct sockaddr_storage src; 
+	//unsigned short src_port;
   unsigned short dest_port;
 };
 
@@ -157,4 +165,17 @@ struct crude_struct{
   } while (0)
 #endif
 
+#ifndef timespecsub
+  #define	timespecsub(tsp, usp, vsp)					\
+	do {								\
+		(vsp)->tv_sec = (tsp)->tv_sec - (usp)->tv_sec;		\
+		(vsp)->tv_nsec = (tsp)->tv_nsec - (usp)->tv_nsec;	\
+		if ((vsp)->tv_nsec < 0) {				\
+			(vsp)->tv_sec--;				\
+			(vsp)->tv_nsec += 1000000000L;			\
+		}							\
+	} while (0)
+#endif
+  
+  
 #endif /* _RUDE_H */

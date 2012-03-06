@@ -1,0 +1,19 @@
+*** flow_txmit.c.orig	2009-07-17 13:00:25.000000000 +0200
+--- flow_txmit.c	2009-07-17 13:31:14.000000000 +0200
+***************
+*** 43,49 ****
+  extern struct udp_data *data;
+  extern char            *buffer;
+  
+! struct timespec pre_nano_sleep = {0,10000005};//10ms+5nanos...see man nanosleep 
+  /*
+   * wait_for_xmit(): Wait for certain period of time in busy-loop
+   */
+--- 43,49 ----
+  extern struct udp_data *data;
+  extern char            *buffer;
+  
+! struct timespec pre_nano_sleep = {0,10005};//10us+5nanos...see man nanosleep 
+  /*
+   * wait_for_xmit(): Wait for certain period of time in busy-loop
+   */

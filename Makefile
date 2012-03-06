@@ -1,3 +1,4 @@
+# Generated automatically from Makefile.in by configure.
 # $Id: Makefile.in,v 1.1 2005/05/31 07:12:38 ubik Exp $
 #
 # autoconf/Makefile.in - the main Makefile template for RUDE and CRUDE
@@ -11,7 +12,7 @@
 ##############################################################################
 SHELL   = /bin/sh
 SUBDIRS = rude crude
-@SET_MAKE@
+
 
 all:
 	@for i in $(SUBDIRS); do \

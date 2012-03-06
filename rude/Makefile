@@ -1,3 +1,4 @@
+# Generated automatically from Makefile.in by configure.
 # $Id: Makefile.in,v 1.2 2005/06/30 12:02:49 juranek Exp $
 #
 # Makefile.in for RUDE
@@ -11,22 +12,21 @@
 ##############################################################################
 SHELL = /bin/sh
 
-prefix        = @prefix@
-exec_prefix   = @exec_prefix@
+prefix        = /usr/local
+exec_prefix   = ${prefix}
 
-bindir        = @bindir@
-mandir        = @mandir@/man8
-sbindir       = @sbindir@
-srcdir        = @srcdir@
+bindir        = ${exec_prefix}/bin
+mandir        = ${prefix}/man/man8
+sbindir       = ${exec_prefix}/sbin
+srcdir        = .
 
-INSTALL  = @INSTALL@ -o root -g root -m 0755
-VPATH    = @srcdir@
+INSTALL  = /usr/bin/install -c -o root -g root -m 0755
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@
-LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
-LIBS     = @LIBS@
+CC       = gcc
+CFLAGS   =  -O2 -I../include
+LDFLAGS  = 
+DEFS     = -DHAVE_CONFIG_H
+LIBS     = -lm 
 MAN8     = rude.8
 
 RUDE_OBJS = flow_cntl.o flow_txmit.o main.o parse.o mcast.o
