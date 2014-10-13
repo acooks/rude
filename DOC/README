@@ -52,7 +52,7 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
     with the following commands (you must be in the program's source code
     root directory):
 
-	autoheader -l ./autoconf
+	autoheader autoconf/configure.in
 	autoconf autoconf/configure.in > configure
 	chmod 755 configure
 
