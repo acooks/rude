@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 ###############################################################################
 #    dump2trace.pl - converst tcpdump-output to TRACE file
 #                    No documentation (yet) available...

@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 ###############################################################################
 #    crude_jitter.pl - refines the output from CRUDE.
 #

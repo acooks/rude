@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 ###############################################################################
 #    crude_parse.pl - refines the output from CRUDE.
 #

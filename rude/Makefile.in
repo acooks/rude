@@ -1,4 +1,4 @@
-# $Id$
+# $Id: Makefile.in,v 1.2 2005/06/30 12:02:49 juranek Exp $
 #
 # Makefile.in for RUDE
 #
@@ -29,7 +29,7 @@ DEFS     = @DEFS@
 LIBS     = @LIBS@
 MAN8     = rude.8
 
-RUDE_OBJS = flow_cntl.o flow_txmit.o main.o parse.o
+RUDE_OBJS = flow_cntl.o flow_txmit.o main.o parse.o mcast.o
 
 ##############################################################################
 # Rules for make

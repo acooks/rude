@@ -23,6 +23,7 @@
  *****************************************************************************/
 #include <config.h>
 #include <rude.h>
+#include <mcast.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -39,7 +40,8 @@
 #include <sched.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
+#include <sys/ioctl.h>
+ #include <net/if.h>
 
 /*
  *  Function prototypes
@@ -79,6 +81,7 @@ int main(int argc, char **argv)
   FILE *scriptfile      = NULL;
   int priority          = 0;
   int opt_ret           = 0;
+//  unsigned long citac   = 0;
   int retval            = 0;
   uid_t user_id         = getuid();
   struct sigaction action;
@@ -156,17 +159,20 @@ int main(int argc, char **argv)
 
   if((retval < 0) || (scriptfile == NULL)){
     if(scriptfile != NULL){ fclose(scriptfile); }
+    RUDEBUG7("rude: parse error");
     exit(-2);
   }
-  
+    
   /* Read & parse the given configuration file */
   retval = read_cfg(scriptfile);
   fclose(scriptfile);
-
+ 
   if(retval <= 0){
     RUDEBUG1("rude: EXIT - %d parse errors in configuration file\n",retval);
     clean_up();
     exit(3);
+  }else{
+    RUDEBUG7("rude: config file readed");
   }
   dump_config();
 
@@ -305,6 +311,7 @@ static void dump_config(void)
 #if (DEBUG > 6)
   struct flow_cfg *flow   = head;
   struct flow_cfg *flow_m = head;
+  char straddr[INET6_ADDRSTRLEN];
 
   /* Print the header, if there is any data to dump */
   if(flow != NULL){
@@ -314,16 +321,34 @@ static void dump_config(void)
   }
 
   while(flow_m != NULL){
-    fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu ",
+		 switch ((flow->dst).ss_family) {
+        case AF_INET:{
+				struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
+				fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu ",
 	    flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
 	    flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
-	    flow->flow_sport,inet_ntoa(flow->dst.sin_addr),
-	    ntohs(flow->dst.sin_port));
+	    flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
+	    ntohs(dstin->sin_port));
+			}
+				break;
+				case AF_INET6:{
+				struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
+					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu ",
+	    flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
+	    flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+	    flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
+	    ntohs(dstin->sin6_port));
+			}
+				break;
+				default:
+					fprintf(stderr,"Protocol is not known:%s ",(flow->dst).ss_family);				
+				}
+    
 
     switch(flow->params.ftype){
     case(CBR):
-      fprintf(stderr,"CBR [r:%d s:%d]\n",
-	      flow->params.cbr.rate,flow->params.cbr.psize);
+      fprintf(stderr,"CBR [r:%d s:%d ps:%d tp:%d]\n",
+	      flow->params.cbr.rate,flow->params.cbr.psize,flow->params.cbr.package_size,flow->params.cbr.time_period);
       break;
     case(TRACE):
       fprintf(stderr,"TRACE [list_size:%u]\n",flow->params.trace.list_size);
@@ -351,17 +376,35 @@ static void dump_config(void)
   }
 
   while(flow != NULL){
-    fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
-	    flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_usec,
-	    flow->flow_stop.tv_sec, flow->flow_stop.tv_usec,
-	    flow->flow_sport, inet_ntoa(flow->dst.sin_addr),
-	    ntohs(flow->dst.sin_port), flow->errors, flow->success,
+    		 switch ((flow->dst).ss_family) {
+        case AF_INET:{
+				struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
+				fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
+	    flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
+	    flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+	    flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
+	    ntohs(dstin->sin_port),flow->errors, flow->success,
 	    flow->sequence_nmbr);
+			}
+				break;
+				case AF_INET6:{
+				struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
+					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
+	    flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
+	    flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+	    flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
+	    ntohs(dstin->sin6_port),flow->errors, flow->success,
+	    flow->sequence_nmbr);
+			}
+				break;
+				default:
+					fprintf(stderr,"Protocol is not known:%s ",(flow->dst).ss_family);				
+				}
 
     switch(flow->params.ftype){
     case(CBR):
-      fprintf(stderr,"CBR [r:%d s:%d]\n",
-	      flow->params.cbr.rate,flow->params.cbr.psize);
+      fprintf(stderr,"CBR [r:%d s:%d ps:%d tp:%d]\n",
+	      flow->params.cbr.rate,flow->params.cbr.psize,flow->params.cbr.package_size,flow->params.cbr.time_period);
       break;
     case(TRACE):
       fprintf(stderr,"TRACE [list_size:%u]\n",flow->params.trace.list_size);
@@ -386,6 +429,7 @@ static void dump_config(void)
 static void print_results(void)
 {
   struct flow_cfg *flow   = NULL;
+  char straddr[INET6_ADDRSTRLEN];
 
   if((flow = done) != NULL){
     printf("\nF_ID: F_START: F_STOP: F_SPORT: F_DADD: F_DPORT:"
@@ -393,17 +437,35 @@ static void print_results(void)
   }
 
   while(flow != NULL){
-    printf("%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
-	   flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_usec,
-	   flow->flow_stop.tv_sec, flow->flow_stop.tv_usec,
-	   flow->flow_sport, inet_ntoa(flow->dst.sin_addr),
-	   ntohs(flow->dst.sin_port), flow->errors, flow->success,
-	   flow->sequence_nmbr);
+    		 switch ((flow->dst).ss_family) {
+        case AF_INET:{
+				struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
+				fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
+	    flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
+	    flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+	    flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
+	    ntohs(dstin->sin_port),flow->errors, flow->success,
+	    flow->sequence_nmbr);
+			}
+				break;
+				case AF_INET6:{
+				struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
+					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
+	    flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
+	    flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+	    flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
+	    ntohs(dstin->sin6_port),flow->errors, flow->success,
+	    flow->sequence_nmbr);
+			}
+				break;
+				default:
+					fprintf(stderr,"Protocol is not known:%s ",(flow->dst).ss_family);				
+				}
 
     switch(flow->params.ftype){
     case(CBR):
-      printf("CBR [r:%d s:%d]\n",
-	     flow->params.cbr.rate,flow->params.cbr.psize);
+      fprintf(stderr,"CBR [r:%d s:%d ps:%d tp:%d]\n",
+	      flow->params.cbr.rate,flow->params.cbr.psize,flow->params.cbr.package_size,flow->params.cbr.time_period);
       break;
     case(TRACE):
       printf("TRACE [list_size:%u]\n",flow->params.trace.list_size);
@@ -423,26 +485,107 @@ static void print_results(void)
  */
 static int open_sockets(void)
 {
-  struct sockaddr our_addr;
+  struct sockaddr_storage our_addr;
   struct flow_cfg *flow = head;
   int retval = 0;
   int flags  = 0;
   int tos;
-
-  memset(&our_addr, 0, sizeof(struct sockaddr));
-  ((struct sockaddr_in *)&our_addr)->sin_family = AF_INET;
-  ((struct sockaddr_in *)&our_addr)->sin_addr.s_addr = htonl(INADDR_ANY);
-
+  char addr[127];
+	
   while(flow != NULL){
-    if((flow->send_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-      RUDEBUG1("open_sockets() - socket() failed for flow %ld: %s\n",
-	       flow->flow_id,strerror(errno));
-      retval--;
-      goto socket_error;
-    }
+	  //pokud je adresa kam chceme vysilat ip6 tak kaslem na to jakou verzi jsme chteli a otevreme soket na ip6
+	  if((flow->dst).ss_family==AF_INET6 ||flow->prefferedVersion == '6'){
+		memset(&our_addr, 0, sizeof(struct sockaddr_storage));
+    	((struct sockaddr_in6 *)&our_addr)->sin6_family = AF_INET6;
+  	    ((struct sockaddr_in6 *)&our_addr)->sin6_addr = in6addr_any;
+		inet_ntop(AF_INET6,&((struct sockaddr_in6 *)&our_addr)->sin6_addr,addr,sizeof(addr));
+		RUDEBUG7("open_socket(): using address: %s\n",addr);
+	    if((flow->send_sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
+    	  RUDEBUG1("open_sockets() - socket() failed for flow %ld: %s\n",
+	      flow->flow_id,strerror(errno));
+      	  retval--;
+          goto socket_error;
+    	}
+		//check if packet_size is enough
+		if(flow->params.cbr.psize < PMINSIZE_V6){
+			RUDEBUG1("open_sockets() - additional check for ipv6 packet size failed, flow %ld, minimal size is %d\n",
+			flow->flow_id,PMINSIZE_V6);
+			retval--;
+			goto socket_error;
+		}
+		
+		
+	}
+	else{
+		memset(&our_addr, 0, sizeof(struct sockaddr_storage));
+    	((struct sockaddr_in *)&our_addr)->sin_family = AF_INET;
+  	    ((struct sockaddr_in *)&our_addr)->sin_addr.s_addr =htonl(INADDR_ANY);
+		inet_ntop(AF_INET,&((struct sockaddr_in *)&our_addr)->sin_addr,addr,sizeof(addr));
+		RUDEBUG7("open_socket(): using address: %s\n",addr);
+	    if((flow->send_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+    	  RUDEBUG1("open_sockets() - socket() failed for flow %ld: %s\n",
+	      flow->flow_id,strerror(errno));
+      	  retval--;
+          goto socket_error;
+    	}
+    }		  
 
-    ((struct sockaddr_in *)&our_addr)->sin_port = htons(flow->flow_sport);
-    if(bind(flow->send_sock, &our_addr, sizeof(struct sockaddr)) < 0){
+	if(isMulticastAddr(&(flow->dst)) > 0){
+		  RUDEBUG7("open_sockets() - dst address is a multicast one. \n");
+		  if(flow -> localIf != NULL){
+			RUDEBUG7("open_sockets() - using specified interface for multicast, name: %s\n",flow->localIf);
+			unsigned int outif;
+			if(0==(outif = if_nametoindex(flow->localIf))){
+				RUDEBUG1("open_sockets() - specified interface does not exist\n");
+				retval--;
+				goto socket_error;
+			}
+			if((flow->dst).ss_family == AF_INET6 && setsockopt(flow->send_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &outif, sizeof(outif))<0){
+				RUDEBUG1("open_sockets() - setsockopt failed for setting multicast interface: %s\n",strerror(errno));
+				retval--;
+				goto socket_error;
+			}
+			//pro ipv4 multicast se neposila multicast interface ale adresa
+			if((flow->dst).ss_family == AF_INET){
+				//zjistime adresu toho rozhrani
+				struct ifreq ifr;
+				strcpy(ifr.ifr_name, flow->localIf);
+				//int tempSock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+				if(ioctl(flow->send_sock,SIOCGIFADDR,&ifr)==-1){
+				//&& setsockopt(flow->send_sock, IPPROTO_IP, IP_MULTICAST_IF, &outif, sizeof(outif))<0){
+					RUDEBUG1("open_sockets() - ioctl failed for getting interface address: %s\n",strerror(errno));
+					retval--;
+					goto socket_error;
+				}
+				//close(tempSock);
+				struct sockaddr_in *si = (struct sockaddr_in*)&ifr.ifr_addr;
+				RUDEBUG7("open_sockets(): interface adresa: %s",inet_ntoa(si->sin_addr));
+				struct in_addr add = si->sin_addr;
+				if(setsockopt(flow->send_sock, IPPROTO_IP, IP_MULTICAST_IF, &add, sizeof(add))<0){
+					RUDEBUG1("open_sockets() - setsockopt failed for setting multicast interface: %s\n",strerror(errno));
+					retval--;
+					goto socket_error;
+				}				
+			}
+		}
+		//jeste TTL
+		unsigned int hlim = 127;      /* range: 0 to 255, default = 1 */
+		if((flow->dst).ss_family == AF_INET6 && setsockopt(flow->send_sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hlim, sizeof(hlim))<0){
+			RUDEBUG1("open_sockets() - setsockopt failed for setting multicast ttl: %s\n",strerror(errno));
+			retval--;
+			goto socket_error;
+		}
+		if((flow->dst).ss_family == AF_INET && setsockopt(flow->send_sock, IPPROTO_IP, IP_MULTICAST_TTL, &hlim, sizeof(hlim))<0){
+			RUDEBUG1("open_sockets() - setsockopt failed for setting multicast interface: %s\n",strerror(errno));
+			retval--;
+			goto socket_error;
+		}
+	}else
+		RUDEBUG7("open_sockets() - dst address is not a multicast one. \n");		
+
+	
+    ((struct sockaddr_in6 *)&our_addr)->sin6_port = htons(flow->flow_sport);
+    if(bind(flow->send_sock, (struct sockaddr *)&our_addr, sizeof(struct sockaddr_in6)) < 0){
       close(flow->send_sock);
       flow->send_sock = 0;
       RUDEBUG1("open_sockets() - bind() failed for flow %ld: %s\n",
@@ -451,6 +594,7 @@ static int open_sockets(void)
       goto socket_error;
     }
 
+	
     if((flags = fcntl(flow->send_sock, F_GETFL, 0)) < 0) {
       RUDEBUG1("open_sockets() - GETFLAGS error\n");
       retval--;
