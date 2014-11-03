@@ -33,6 +33,11 @@ INTRODUCTION (very short):
 COMPILATION AND INSTALLATION INSTRUCTIONS:
 ------------------------------------------
 
+ In order to compile this software, you need a compiler.  How you can
+ obtain a compiler depends on your operating system.  on Debian,
+ for example, you need to run
+ `apt-get install build-essential git automake autoconf`.
+
  1. This package you have received should contain the automatic 'configure'
     script in the source code root directory. If this is true you can jump
     into the step 4. Otherwise read also the steps 2. and 3. that explain
@@ -43,14 +48,14 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
  2. So you have the very clean version. Alright. Before you can compile
     the program you should make the configuration script(s) and other
     files with the GNU autoconf utilities. In other words you require
-    properly installed 'autoheader' and 'autoconf' programs. At least
+    properly installed `autoheader` and `autoconf` programs. At least
     version 2.13 of the GNU autoconf tools seems to work fine.
     [ After those programs are installed you can move on.... ]
 
 
  3. You need to generate some header file(s) and the configuration script
-    with the following commands (you must be in the program's source code
-    root directory):
+    with the following commands (you must be in the project's root
+    directory, right outside the DOC folder):
 
 	autoheader autoconf/configure.in
 	autoconf autoconf/configure.in > configure
@@ -58,7 +63,7 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
 
 
  4. Now you are ready to go on and configure this software package. As
-    usual, you can say './configure --help' to get the full list of
+    usual, you can say `./configure --help` to get the full list of
     configuring switches. Here are only the usually required options:
 
 	--prefix=PREFIX         = Installation directory root (/usr/local/)
@@ -71,9 +76,14 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
 
 	./configure --enable-wall --with-debug-lvl=3
 
+  The configure command will give a warning about ignoring
+  --datarootdir setting.  You can safely ignore this warning.
+
 
  5. 'make all'
 
+    This command will create the executables
+    `rude/rude` and `crude/crude`.
     So far this program is tested on Linux and Solaris2.6 OS's and
     seems to compile/operate without any major drawbacks. Your mileage
     may vary...
@@ -81,6 +91,7 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
 
  6. 'make install'
 
+    This command will install the executables on the filesystem.
     USE MANUAL INSTALLATION IF THIS FAILS. SORRY 'BOUT THAT :)
     Only ROOT can successfully execute this command.
 
