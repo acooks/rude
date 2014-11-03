@@ -44,6 +44,13 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
  for example, you need to run
  `apt-get install build-essential git automake autoconf`.
 
+ You can get the code by running
+ `git clone https://scm.uninett.no/yorn/rude.git`.
+ This will create a new folder named `rude`.
+ If you run into certificate problems and you're on Debian, you may be on
+ a version that is so basic it's missing the root CA's.  You can install
+ these by running `apt get install ca-certificates`.
+ 
  1. This package you have received should contain the automatic 'configure'
     script in the source code root directory. If this is true you can jump
     into the step 4. Otherwise read also the steps 2. and 3. that explain
