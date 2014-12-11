@@ -55,15 +55,15 @@ sub parse_cmdline
 	"usage: dump2trace.pl [-tx | -rx] [-debug] input_file\n";
 
     foreach $_ (@ARGV) {
-	if (/^-debug/) {
-	    $Trace::Debug=1;
-	} elsif (/^-$/ || ! /^-(.*)/) {
-	    $Trace::InFile = $_;
-	    $in_file_set = 1;
-	    last;
-	} else {
-	    die "$usage_msg";
-	}
+		if (/^-debug/) {
+			$Trace::Debug=1;
+		} elsif (/^-$/ || ! /^-(.*)/) {
+			$Trace::InFile = $_;
+			$in_file_set = 1;
+			last;
+		} else {
+			die "$usage_msg";
+		}
     }
 
     if(! $in_file_set) {
@@ -96,15 +96,15 @@ sub read_input
 	($Sec, $Usec, $Size) = /^(\d+)\.(\d+) .* udp (\d+).*$/;
 
 	if( $Loop == 0 ) {
-	    $StartSec  = $Sec;
-	    $StartUsec = $Usec;
-	    $Loop++;
+		$StartSec  = $Sec;
+		$StartUsec = $Usec;
+		$Loop++;
 	}
 
 	$Usec -= $StartUsec;
 	if( $Usec < 0 ){
-	    $Usec += 1000000;
-	    $Sec  -= 1;
+		$Usec += 1000000;
+		$Sec  -= 1;
 	}
 	$Sec -= $StartSec;
 

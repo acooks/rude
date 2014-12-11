@@ -3,7 +3,7 @@
 # autoconf/configure.in for RUDE and CRUDE
 #
 # Authors: Juha Laine     <james@cs.tut.fi>
-#	   Sampo Saaristo <sambo@cc.tut.fi>
+#          Sampo Saaristo <sambo@cc.tut.fi>
 #
 # Copyright (C) 1999 Juha Laine, Tampere, Finland
 #                    All rights reserved
@@ -54,16 +54,16 @@ AC_TYPE_UID_T
 AC_CHECK_FUNCS(gettimeofday select strerror munlockall sigaction)
 
 AC_CHECK_FUNC(gethostbyname,[true],
-	      AC_SEARCH_LIBS(gethostbyname, nsl))
+	AC_SEARCH_LIBS(gethostbyname, nsl))
 
 AC_CHECK_FUNC(socket,[true],
-	      AC_SEARCH_LIBS(socket, socket nsl))
+	AC_SEARCH_LIBS(socket, socket nsl))
 
 AC_CHECK_FUNC(inet_addr,[true],
-	      AC_SEARCH_LIBS(inet_addr, xnet))
+	AC_SEARCH_LIBS(inet_addr, xnet))
 
 AC_CHECK_FUNC(sched_setscheduler,[true],
-	      AC_SEARCH_LIBS(sched_setscheduler, posix4))
+	AC_SEARCH_LIBS(sched_setscheduler, posix4))
 
 AC_CHECK_FUNC(pow,[true],
 	AC_SEARCH_LIBS(pow, m))
@@ -123,4 +123,4 @@ AC_ARG_WITH(debug-lvl,
 ###################
 CFLAGS="$CFLAGS -I../include"
 AC_OUTPUT(Makefile:autoconf/Makefile.in rude/Makefile crude/Makefile, \
-	  echo timestamp > include/stamp.h)
+	echo timestamp > include/stamp.h)

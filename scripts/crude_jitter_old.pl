@@ -58,10 +58,10 @@ exit 0;
 ###
 sub print_info
 {
-    print "crude_jitter.pl version 0.4, Copyright (C) 1999 Juha Laine and Sampo Saaristo\n";
-    print "crude_jitter.pl comes with ABSOLUTELY NO WARRANTY!\n";
-    print "This is free software, and you are welcome to redistribute it\n";
-    print "under GNU GENERAL PUBLIC LICENSE Version 2.\n";
+	print "crude_jitter.pl version 0.4, Copyright (C) 1999 Juha Laine and Sampo Saaristo\n";
+	print "crude_jitter.pl comes with ABSOLUTELY NO WARRANTY!\n";
+	print "This is free software, and you are welcome to redistribute it\n";
+	print "under GNU GENERAL PUBLIC LICENSE Version 2.\n";
 }
 
 ###
@@ -69,31 +69,31 @@ sub print_info
 ###
 sub parse_cmdline
 {
-    my $in_file_set = 0;
-    my $usage_msg   =
+	my $in_file_set = 0;
+	my $usage_msg   =
 	"usage: crude_jitter.pl [-tx | -rx] [-debug] input_file\n";
 
-    foreach $_ (@ARGV) {
-	if (/^-[Rr][Xx]/) {
-	    $Jitter::WTime = "Rx";
-	} elsif (/^-[Tt][Xx]/) {
-	    $Jitter::WTime = "Tx";
-	} elsif (/^-debug/) {
-	    $Jitter::Debug=1;
-	} elsif (/^-$/ || ! /^-(.*)/) {
-	    $Jitter::InFile = $_;
-	    $in_file_set = 1;
-	    last;
-	} else {
-	    die "$usage_msg";
+	foreach $_ (@ARGV) {
+		if (/^-[Rr][Xx]/) {
+			$Jitter::WTime = "Rx";
+		} elsif (/^-[Tt][Xx]/) {
+			$Jitter::WTime = "Tx";
+		} elsif (/^-debug/) {
+			$Jitter::Debug=1;
+		} elsif (/^-$/ || ! /^-(.*)/) {
+			$Jitter::InFile = $_;
+			$in_file_set = 1;
+			last;
+		} else {
+			die "$usage_msg";
+		}
 	}
-    }
 
-    if(! $in_file_set) {
-	die "ERROR: no input file set!\n";
-    }
+	if(! $in_file_set) {
+		die "ERROR: no input file set!\n";
+	}
 
-    print "WTime=$Jitter::WTime InFile=$Jitter::InFile\n"
+	print "WTime=$Jitter::WTime InFile=$Jitter::InFile\n"
 	if $Jitter::Debug;
 }
 
@@ -103,101 +103,101 @@ sub parse_cmdline
 ###
 sub read_input
 {
-    my @PTime;
-    my @FSeq;
-    my @FErr;
-    my @Loop;
-    my $CTime;
-    my $Flow;
-    my $Flowx;
-    my $Seq;
-    my $POS_before = 0;
-    my $POS_after  = 0;
+	my @PTime;
+	my @FSeq;
+	my @FErr;
+	my @Loop;
+	my $CTime;
+	my $Flow;
+	my $Flowx;
+	my $Seq;
+	my $POS_before = 0;
+	my $POS_after  = 0;
 
-    open(INPUT,"$Jitter::InFile") ||
+	open(INPUT,"$Jitter::InFile") ||
 	die "ERROR: can't open input file $Jitter::InFile!\n";
 
-    while (!eof(INPUT)){
+	while (!eof(INPUT)){
 
-	$POS_before = tell(INPUT);
-	$_ = <INPUT>;
-	$POS_after  = tell(INPUT);
+		$POS_before = tell(INPUT);
+		$_ = <INPUT>;
+		$POS_after  = tell(INPUT);
 
-	if (/^ID/) {
-	    if( $Jitter::WTime =~ /Rx/ ) {
-		($Flow, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=\S+ Rx\=(\S+) SIZE\=\d+$/;
-	    } else {
-		($Flow, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=(\S+) Rx\=\S+ SIZE\=\d+$/;
-	    }
-
-	    print "FLOW=$Flow Seq=$Seq CTime=$CTime\n" if $Jitter::Debug;
-
-	    if( $Loop[$Flow] == 0 ) {
-		$FSeq[$Flow]   = $Seq;
-		$Loop[$Flow]  += 1;
-		$PTime[$Flow]  = $CTime;
-                open( OUTPUT, ">jitter.$Flow") ||
-                    die "ERROR: can't create outputfile jitter.$Flow!\n";
-		print OUTPUT sprintf("%d\t%.6f\n",$Seq,0);
-		close OUTPUT;
-		next;
-	    }
-
-	    open( OUTPUT, ">>jitter.$Flow") ||
-		die "ERROR: can't open outputfile jitter.$Flow!\n";
-
-#########################################################################
-
-	    if( $Seq < ($FSeq[$Flow] + 1) ){
-		print "ERROR: skipping old packet...\n" if $Jitter::Debug;
-		close OUTPUT;
-		next;
-	    } elsif( $Seq > ($FSeq[$Flow] + 1) ){
-		print "ERROR: packet sequence anomaly!\n" if $Jitter::Debug;
-
-		# Locate the correct entry and if it exists read and
-		# process it.
-
-		seek(INPUT,0,0);
-		while(<INPUT>){
-		    if (/^ID/) {
+		if (/^ID/) {
 			if( $Jitter::WTime =~ /Rx/ ) {
-			    ($Flowx, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=\S+ Rx\=(\S+) SIZE\=\d+$/;
+				($Flow, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=\S+ Rx\=(\S+) SIZE\=\d+$/;
 			} else {
-			    ($Flowx, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=(\S+) Rx\=\S+ SIZE\=\d+$/;
+				($Flow, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=(\S+) Rx\=\S+ SIZE\=\d+$/;
 			}
 
-			if(($Flowx != $Flow) || ($Seq != ($FSeq[$Flow] + 1))){
-			    next;
-			} else {
-			    print OUTPUT sprintf("%d\t%.6f\n",
-						 $Seq,($CTime-$PTime[$Flow]));
-			    $FSeq[$Flow]   = $Seq;
-			    $Loop[$Flow]  += 1;
-			    $PTime[$Flow]  = $CTime;
-			    last;
-			}
-		    }
-		}
-		seek(INPUT,$POS_before,0);
+			print "FLOW=$Flow Seq=$Seq CTime=$CTime\n" if $Jitter::Debug;
 
-		if(($Flowx != $Flow) || ($FSeq[$Flow] != $Seq)){
-		    print sprintf("ERROR: Packet#=%d for flow %d not found!\n",
-				  ($FSeq[$Flow]+1),$Flow);
-		    $FSeq[$Flow]  += 1;
-		    $FErr[$Flow]  -= 1;
-		    print OUTPUT sprintf("%d\t%.6f\t%d\n",
-					 $FSeq[$Flow],"0.0",$FErr[$Flow]);
+			if( $Loop[$Flow] == 0 ) {
+				$FSeq[$Flow]   = $Seq;
+				$Loop[$Flow]  += 1;
+				$PTime[$Flow]  = $CTime;
+				open( OUTPUT, ">jitter.$Flow") ||
+					die "ERROR: can't create outputfile jitter.$Flow!\n";
+				print OUTPUT sprintf("%d\t%.6f\n",$Seq,0);
+				close OUTPUT;
+				next;
+			}
+
+			open( OUTPUT, ">>jitter.$Flow") ||
+				die "ERROR: can't open outputfile jitter.$Flow!\n";
+
+	#########################################################################
+
+			if( $Seq < ($FSeq[$Flow] + 1) ){
+			print "ERROR: skipping old packet...\n" if $Jitter::Debug;
+			close OUTPUT;
+			next;
+			} elsif( $Seq > ($FSeq[$Flow] + 1) ){
+			print "ERROR: packet sequence anomaly!\n" if $Jitter::Debug;
+
+			# Locate the correct entry and if it exists read and
+			# process it.
+
+			seek(INPUT,0,0);
+			while(<INPUT>){
+				if (/^ID/) {
+				if( $Jitter::WTime =~ /Rx/ ) {
+					($Flowx, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=\S+ Rx\=(\S+) SIZE\=\d+$/;
+				} else {
+					($Flowx, $Seq, $CTime) = /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=(\S+) Rx\=\S+ SIZE\=\d+$/;
+				}
+
+				if(($Flowx != $Flow) || ($Seq != ($FSeq[$Flow] + 1))){
+					next;
+				} else {
+					print OUTPUT sprintf("%d\t%.6f\n",
+					                     $Seq,($CTime-$PTime[$Flow]));
+					$FSeq[$Flow]   = $Seq;
+					$Loop[$Flow]  += 1;
+					$PTime[$Flow]  = $CTime;
+					last;
+				}
+				}
+			}
+			seek(INPUT,$POS_before,0);
+
+			if(($Flowx != $Flow) || ($FSeq[$Flow] != $Seq)){
+				print sprintf("ERROR: Packet#=%d for flow %d not found!\n",
+				              ($FSeq[$Flow]+1),$Flow);
+				$FSeq[$Flow]  += 1;
+				$FErr[$Flow]  -= 1;
+				print OUTPUT sprintf("%d\t%.6f\t%d\n",
+				                     $FSeq[$Flow],"0.0",$FErr[$Flow]);
+			}
+			} else {
+			print OUTPUT sprintf("%d\t%.6f\n",$Seq,($CTime-$PTime[$Flow]));
+			$FSeq[$Flow]   = $Seq;
+			$Loop[$Flow]  += 1;
+			$PTime[$Flow]  = $CTime;
+			}
+			close OUTPUT;
+		} else {
+			print "ERROR: invalid input line!\n";
 		}
-	    } else {
-		print OUTPUT sprintf("%d\t%.6f\n",$Seq,($CTime-$PTime[$Flow]));
-		$FSeq[$Flow]   = $Seq;
-		$Loop[$Flow]  += 1;
-		$PTime[$Flow]  = $CTime;
-	    }
-	    close OUTPUT;
-	} else {
-	    print "ERROR: invalid input line!\n";
-	}
-    } # End Of While
+	} # End Of While
 }

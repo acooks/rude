@@ -45,43 +45,43 @@ extern struct flow_cfg *done;
  */
 static int remove_flow(struct flow_cfg *to_remove)
 {
-  struct flow_cfg *flow = head;
-  struct flow_cfg *prev = NULL;
+	struct flow_cfg *flow = head;
+	struct flow_cfg *prev = NULL;
 
-  /* Look up the "to_remove" and the previous flow object. */
-  /* Check the results for possible "overflow" error(s).   */
-  while((flow != to_remove) && (flow != NULL)){
-    prev = flow;
-    flow = flow->next;
-  }
-  if(flow == NULL){
-    RUDEBUG1("remove_flow(): flow to remove was not found!\n");
-    return 0;
-  }
+	/* Look up the "to_remove" and the previous flow object. */
+	/* Check the results for possible "overflow" error(s).   */
+	while((flow != to_remove) && (flow != NULL)){
+		prev = flow;
+		flow = flow->next;
+	}
+	if(flow == NULL){
+		RUDEBUG1("remove_flow(): flow to remove was not found!\n");
+		return 0;
+	}
 
-  /* Initialize the next block for this flow - if any */
-  if((flow = to_remove->mod_flow) != NULL){
-    flow->next          = to_remove->next;
-    flow->send_sock     = to_remove->send_sock;
-    flow->sequence_nmbr = to_remove->sequence_nmbr;
-  } else {
-    if(to_remove->send_sock>0){
-      close(to_remove->send_sock);
-    }
-    to_remove->send_sock = 0;
-    flow = to_remove->next;
-  }
+	/* Initialize the next block for this flow - if any */
+	if((flow = to_remove->mod_flow) != NULL){
+		flow->next          = to_remove->next;
+		flow->send_sock     = to_remove->send_sock;
+		flow->sequence_nmbr = to_remove->sequence_nmbr;
+	} else {
+		if(to_remove->send_sock>0){
+			close(to_remove->send_sock);
+		}
+		to_remove->send_sock = 0;
+		flow = to_remove->next;
+	}
 
-  /* Unlink the object "to_remove" from the active list */
-  if(prev == NULL){ head = flow; }
-  else { prev->next = flow; }
+	/* Unlink the object "to_remove" from the active list */
+	if(prev == NULL){ head = flow; }
+	else { prev->next = flow; }
 
-  /* Link the object to the "done" list and return SUCCESS */
-  /* FIXME: to_remove->mod_flow = NULL; ???? */
-  to_remove->next = done;
-  done = to_remove;
-  RUDEBUG7("remove_flow(): block removed from flow id=%ld\n",done->flow_id);
-  return 1;
+	/* Link the object to the "done" list and return SUCCESS */
+	/* FIXME: to_remove->mod_flow = NULL; ???? */
+	to_remove->next = done;
+	done = to_remove;
+	RUDEBUG7("remove_flow(): block removed from flow id=%ld\n",done->flow_id);
+	return 1;
 } /* remove_flow() */
 
 
@@ -92,37 +92,37 @@ static int remove_flow(struct flow_cfg *to_remove)
  *               list.
  */
 struct flow_cfg *find_next(void)
-{  
-  struct flow_cfg *flow   = head;
-  struct flow_cfg *prev   = NULL;
-  struct flow_cfg *target = NULL;
-  struct timeval   now;
-  
-  /* Get the current time */
-  gettimeofday(&now, NULL);
+{
+	struct flow_cfg *flow   = head;
+	struct flow_cfg *prev   = NULL;
+	struct flow_cfg *target = NULL;
+	struct timeval   now;
 
-  /* Find the next flow from which should send the packet */
-  while(flow){
-    /* Remove the flows that are already "done". The remove_flow() */
-    /* function modifies the active and passive lists (pointed by  */
-    /* head and done respectively)...                              */
-    if(timercmp(&flow->flow_stop,&now,<) ||
-       timercmp(&flow->next_tx,&flow->flow_stop,>)){
-      remove_flow(flow);
-      if(prev != NULL){ flow = prev->next; }
-      else { flow = head; }
-      continue;
-    }
+	/* Get the current time */
+	gettimeofday(&now, NULL);
 
-    /* Mark the current flow as target, if certain conditions are met... */
-    if((target == NULL) || (timercmp(&flow->next_tx,&target->next_tx,<))){
-      target = flow;
-    }
-    prev = flow;
-    flow = flow->next;
-  }
+	/* Find the next flow from which should send the packet */
+	while(flow){
+		/* Remove the flows that are already "done". The remove_flow() */
+		/* function modifies the active and passive lists (pointed by  */
+		/* head and done respectively)...                              */
+		if(timercmp(&flow->flow_stop,&now,<) ||
+			timercmp(&flow->next_tx,&flow->flow_stop,>)){
+			remove_flow(flow);
+			if(prev != NULL){ flow = prev->next; }
+			else { flow = head; }
+			continue;
+		}
 
-  return target;
+		/* Mark the current flow as target, if certain conditions are met... */
+		if((target == NULL) || (timercmp(&flow->next_tx,&target->next_tx,<))){
+			target = flow;
+		}
+		prev = flow;
+		flow = flow->next;
+	}
+
+	return target;
 } /* find_next() */
 
 
@@ -132,57 +132,57 @@ struct flow_cfg *find_next(void)
  *              attention if one adds new flow types to this program...
  */
 void clean_up(void)
-{  
-  struct flow_cfg *tmp1;
+{
+	struct flow_cfg *tmp1;
 
-  /*
-   * Clear the active flow list
-   */
-  while((tmp1 = head) != NULL){
-    /* Close the open connections (if any) */
-    if(head->send_sock > 0){
-      close(head->send_sock);
-      head->send_sock = 0;
-    }
+	/*
+	 * Clear the active flow list
+	 */
+	while((tmp1 = head) != NULL){
+		/* Close the open connections (if any) */
+		if(head->send_sock > 0){
+			close(head->send_sock);
+			head->send_sock = 0;
+		}
 
-    /* Unlink this flow and update the pointers before destruction */
-    if(head->mod_flow != NULL){
-      head       = head->mod_flow;
-      head->next = tmp1->next;
-    } else {
-      head = head->next;
-    }
+		/* Unlink this flow and update the pointers before destruction */
+		if(head->mod_flow != NULL){
+			head       = head->mod_flow;
+			head->next = tmp1->next;
+		} else {
+			head = head->next;
+		}
 
-    /*** DO THE EXTRA CLEAN-UP HERE ***/
-    if(tmp1->params.ftype == TRACE){
-      free(tmp1->params.trace.list);
-    }
-    /*** DO THE EXTRA CLEAN-UP HERE ***/
+		/*** DO THE EXTRA CLEAN-UP HERE ***/
+		if(tmp1->params.ftype == TRACE){
+			free(tmp1->params.trace.list);
+		}
+		/*** DO THE EXTRA CLEAN-UP HERE ***/
 
-    /* Clean up the rest of this block/flow */
-    free(tmp1);
-  }
+		/* Clean up the rest of this block/flow */
+		free(tmp1);
+	}
 
-  /*
-   * Clear the passive (already done) list
-   */
-  while((tmp1 = done) != NULL){
-    /* Unlink the block from the list */
-    done = done->next;
-    
-    /*** DO THE EXTRA CLEAN-UP HERE ***/
-    if(tmp1->params.ftype == TRACE){
-      free(tmp1->params.trace.list);
-    }
-    /*** DO THE EXTRA CLEAN-UP HERE ***/
+	/*
+	 * Clear the passive (already done) list
+	 */
+	while((tmp1 = done) != NULL){
+		/* Unlink the block from the list */
+		done = done->next;
 
-    /* Clean up the rest of this block/flow */
-    free(tmp1);
-  }
+		/*** DO THE EXTRA CLEAN-UP HERE ***/
+		if(tmp1->params.ftype == TRACE){
+			free(tmp1->params.trace.list);
+		}
+		/*** DO THE EXTRA CLEAN-UP HERE ***/
 
-  /* Free the globally reserver memory */
-  free(buffer);
+		/* Clean up the rest of this block/flow */
+		free(tmp1);
+	}
 
-  RUDEBUG7("clean_up(): DONE\n");
-  return;
+	/* Free the globally reserver memory */
+	free(buffer);
+
+	RUDEBUG7("clean_up(): DONE\n");
+	return;
 } /* clean_up() */

@@ -25,7 +25,7 @@
 use strict;
 
 #########################################################################
-# WTime = Tx | Rx 
+# WTime = Tx | Rx
 #         Calculate the time according to transmission (Tx) or reception
 #         (Rx) timelabel. DEFAULT = Rx.
 #########################################################################
@@ -78,10 +78,10 @@ exit 0;
 ###
 sub print_info
 {
-    print "crude_parse.pl version 0.4, Copyright (C) 1999 Juha Laine and Sampo Saaristo\n";
-    print "crude_parse.pl comes with ABSOLUTELY NO WARRANTY!\n";
-    print "This is free software, and you are welcome to redistribute it\n";
-    print "under GNU GENERAL PUBLIC LICENSE Version 2.\n";
+	print "crude_parse.pl version 0.4, Copyright (C) 1999 Juha Laine and Sampo Saaristo\n";
+	print "crude_parse.pl comes with ABSOLUTELY NO WARRANTY!\n";
+	print "This is free software, and you are welcome to redistribute it\n";
+	print "under GNU GENERAL PUBLIC LICENSE Version 2.\n";
 }
 
 
@@ -90,41 +90,41 @@ sub print_info
 ###
 sub parse_cmdline
 {
-    my $in_file_set = 0;
-    my $usage_msg   =
-	"usage: crude_parse.pl [-tx | -rx] [-prec=#] [-debug] input_file\n";
-    
-    foreach $_ (@ARGV) {
-	if (/^-prec=(.*)/) {
-            $Parse::Prec = $1;
-	} elsif (/^-[Rr][Xx]/) {
-	    $Parse::WTime = "Rx";
-	} elsif (/^-[Tt][Xx]/) {
-	    $Parse::WTime = "Tx";
-	} elsif (/^-debug/) {
-	    $Parse::Debug=1;
-	} elsif (/^-$/ || ! /^-(.*)/) {
-	    $Parse::InFile = $_;
-	    $in_file_set = 1;
-	    last;
-	} else {
-	    die "$usage_msg";
+	my $in_file_set = 0;
+	my $usage_msg   =
+		"usage: crude_parse.pl [-tx | -rx] [-prec=#] [-debug] input_file\n";
+
+	foreach $_ (@ARGV) {
+		if (/^-prec=(.*)/) {
+			$Parse::Prec = $1;
+		} elsif (/^-[Rr][Xx]/) {
+			$Parse::WTime = "Rx";
+		} elsif (/^-[Tt][Xx]/) {
+			$Parse::WTime = "Tx";
+		} elsif (/^-debug/) {
+			$Parse::Debug=1;
+		} elsif (/^-$/ || ! /^-(.*)/) {
+			$Parse::InFile = $_;
+			$in_file_set = 1;
+			last;
+		} else {
+			die "$usage_msg";
+		}
 	}
-    }
-    
-    if ($Parse::Prec != 1 && $Parse::Prec != 10 && $Parse::Prec != 100 && $Parse::Prec != 1000) {
-        die "ERROR: invalid precision value: $Parse::Prec !!!\n";
-    }
-    
-    if(! $in_file_set) {
-        die "ERROR: no input file set!\n";
-    }
 
-    $Parse::PLen   = log($Parse::Prec)/log(10);
-    $Parse::Step   = 10**(6-$Parse::PLen);
-    $Parse::LSpeed = ($Parse::Prec * 8);
+	if ($Parse::Prec != 1 && $Parse::Prec != 10 && $Parse::Prec != 100 && $Parse::Prec != 1000) {
+		die "ERROR: invalid precision value: $Parse::Prec !!!\n";
+	}
 
-    print "Prec=$Parse::Prec PLen=$Parse::PLen Step=$Parse::Step LSpeed=$Parse::LSpeed WTime=$Parse::WTime\n"
+	if(! $in_file_set) {
+		die "ERROR: no input file set!\n";
+	}
+
+	$Parse::PLen   = log($Parse::Prec)/log(10);
+	$Parse::Step   = 10**(6-$Parse::PLen);
+	$Parse::LSpeed = ($Parse::Prec * 8);
+
+	print "Prec=$Parse::Prec PLen=$Parse::PLen Step=$Parse::Step LSpeed=$Parse::LSpeed WTime=$Parse::WTime\n"
 	if $Parse::Debug;
 }
 
@@ -134,18 +134,18 @@ sub parse_cmdline
 ###
 sub time_calc
 {
-    my $time1;
-    my $time2;
+	my $time1;
+	my $time2;
 
-    die "ERROR: time_calc got wrong # of arguments!\n"
+	die "ERROR: time_calc got wrong # of arguments!\n"
 	if (scalar(@_) != 4);
 
-    $time1  = "0.".substr($_[1],0,"$Parse::PLen");
-    $time1 += $_[0];
-    $time2  = "0.".substr($_[3],0,"$Parse::PLen");
-    $time2 += $_[2];
+	$time1  = "0.".substr($_[1],0,"$Parse::PLen");
+	$time1 += $_[0];
+	$time2  = "0.".substr($_[3],0,"$Parse::PLen");
+	$time2 += $_[2];
 
-    return($time2-$time1);
+	return($time2-$time1);
 }
 
 
@@ -154,22 +154,22 @@ sub time_calc
 ###
 sub time_cmp
 {
-    my $time1r;
-    my $time2r;
+	my $time1r;
+	my $time2r;
 
-    die "ERROR: time_cmp got wrong # of arguments!\n"
+	die "ERROR: time_cmp got wrong # of arguments!\n"
 	if (scalar(@_) != 4);
 
-    $time1r = substr($_[1],0,"$Parse::PLen");
-    $time2r = substr($_[3],0,"$Parse::PLen");
+	$time1r = substr($_[1],0,"$Parse::PLen");
+	$time2r = substr($_[3],0,"$Parse::PLen");
 
-    print "$_[0] $_[1] $_[2] $_[3]\n" if $Parse::Debug;
+	print "$_[0] $_[1] $_[2] $_[3]\n" if $Parse::Debug;
 
-    if($_[0] < $_[2]) { return(-1); }
-    elsif($_[0] > $_[2]) { return(1);  }
-    elsif($time1r < $time2r) { return(-1); }
-    elsif($time1r > $time2r) { return(1);  }
-    else { return 0; }
+	if($_[0] < $_[2]) { return(-1); }
+	elsif($_[0] > $_[2]) { return(1);  }
+	elsif($time1r < $time2r) { return(-1); }
+	elsif($time1r > $time2r) { return(1);  }
+	else { return 0; }
 }
 
 
@@ -178,108 +178,108 @@ sub time_cmp
 ###
 sub read_input
 {
-    my @STime;
-    my @CTime;
-    my $RTime;
-    
-    my @FSample;
-    my @FTotal;
-    my @FCount;
-    my @FTimeS;
-    my @FTimeR;
-    my @FFTable;
-    
-    my $Loop = 0;
-    my $Flow;
-    my $Seq;
-    my $Size;
-    my $Retval;
+	my @STime;
+	my @CTime;
+	my $RTime;
 
-    open(INPUT,"$Parse::InFile") ||
-        die "ERROR: can't open input file $Parse::InFile!\n";
+	my @FSample;
+	my @FTotal;
+	my @FCount;
+	my @FTimeS;
+	my @FTimeR;
+	my @FFTable;
 
-   while (<INPUT>) {
-	if (/^ID/) {
-	    if( $Parse::WTime =~ /Rx/ ) {
-		($Flow, $Seq, $CTime[1], $CTime[2], $Size) =
-		    /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=\S+ Rx\=(\d+)\.(\d+) SIZE\=(\d+)$/;
-	    } else {
-		($Flow, $Seq, $CTime[1], $CTime[2], $Size) =
-		    /^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=(\d+)\.(\d+) Rx\=\S+ SIZE\=(\d+)$/;
-	    }
+	my $Loop = 0;
+	my $Flow;
+	my $Seq;
+	my $Size;
+	my $Retval;
 
-#
-# Initialize the "Zero" timesample during the first loop...
-#
-	    if( $Loop == 0 ) {
-		$STime[1] = $CTime[1];
-		$STime[2] = $CTime[2];
-	    }
+	open(INPUT,"$Parse::InFile") ||
+		die "ERROR: can't open input file $Parse::InFile!\n";
 
-#
-# Open the file for output. If the entry was/is the 1st for this flow,
-# truncate the file, if one already exists with the same name. Otherwise
-# open the file in append mode.
-#
-            if( $FFTable[$Flow] == 0 ){
-                open( OUTPUT, ">data.$Flow") ||
-                    die "ERROR: can't create outputfile data.$Flow!\n";
-                $FTimeS[$Flow]  = $CTime[1];
-                $FTimeR[$Flow]  = $CTime[2];
-		$FSample[$Flow] = 0;
-                $FCount[$Flow]  = 0;
-                $FTotal[$Flow]  = 0;
-                $FFTable[$Flow] = 1;
-		$RTime          = time_calc("$STime[1]","$STime[2]",
-					    "$CTime[1]","$CTime[2]");
-                print OUTPUT sprintf("%d\t%.4f\t%d\t%d\t%d\t%d\n",
-                                     $Flow,$RTime,0,0,0,0);
-            } else {
-                open( OUTPUT, ">>data.$Flow") ||
-                    die "ERROR: can't open outputfile data.$Flow!\n";
-            }
+	while (<INPUT>) {
+		if (/^ID/) {
+			if( $Parse::WTime =~ /Rx/ ) {
+			($Flow, $Seq, $CTime[1], $CTime[2], $Size) =
+				/^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=\S+ Rx\=(\d+)\.(\d+) SIZE\=(\d+)$/;
+			} else {
+			($Flow, $Seq, $CTime[1], $CTime[2], $Size) =
+				/^ID\=(\d+) SEQ\=(\d+) SRC\=\S+ DST\=\S+ Tx\=(\d+)\.(\d+) Rx\=\S+ SIZE\=(\d+)$/;
+			}
 
-#########################################################################
-	    
-	    $Retval =  time_cmp("$CTime[1]","$CTime[2]",
-				"$FTimeS[$Flow]","$FTimeR[$Flow]");
+	#
+	# Initialize the "Zero" timesample during the first loop...
+	#
+			if( $Loop == 0 ) {
+				$STime[1] = $CTime[1];
+				$STime[2] = $CTime[2];
+			}
 
-	    if( $Retval < 0 ) {
-		print "ERROR: timelabels do not match!\n";
-	    } elsif( $Retval > 0 ){
-                while( $Retval > 0 ){
-                    $RTime = time_calc("$STime[1]","$STime[2]",
-                                       "$FTimeS[$Flow]","$FTimeR[$Flow]");
-                    print OUTPUT sprintf("%d\t%.4f\t%d\t%d\t%d\t%d\n",
-                                         $Flow,$RTime,
-					 $FSample[$Flow]*$Parse::LSpeed,
-                                         $FTotal[$Flow],$FCount[$Flow],$Seq);
-                    $FSample[$Flow] = 0;
-                    $FTimeR[$Flow]  = sprintf("%06d",
-					      $FTimeR[$Flow]+$Parse::Step);
+	#
+	# Open the file for output. If the entry was/is the 1st for this flow,
+	# truncate the file, if one already exists with the same name. Otherwise
+	# open the file in append mode.
+	#
+			if( $FFTable[$Flow] == 0 ){
+				open( OUTPUT, ">data.$Flow") ||
+				die "ERROR: can't create outputfile data.$Flow!\n";
+				$FTimeS[$Flow]  = $CTime[1];
+				$FTimeR[$Flow]  = $CTime[2];
+				$FSample[$Flow] = 0;
+				$FCount[$Flow]  = 0;
+				$FTotal[$Flow]  = 0;
+				$FFTable[$Flow] = 1;
+				$RTime          = time_calc("$STime[1]","$STime[2]",
+				                            "$CTime[1]","$CTime[2]");
+				print OUTPUT sprintf("%d\t%.4f\t%d\t%d\t%d\t%d\n",
+				                     $Flow,$RTime,0,0,0,0);
+				} else {
+					open( OUTPUT, ">>data.$Flow") ||
+					die "ERROR: can't open outputfile data.$Flow!\n";
+				}
 
-                    if ($FTimeR[$Flow] > 999999){
-                        $FTimeR[$Flow] = sprintf("%06d",$FTimeR[$Flow]-1000000);
-                        $FTimeS[$Flow] += 1;
-                    }
+	#########################################################################
 
-                    $Retval = time_cmp("$CTime[1]","$CTime[2]",
-                                       "$FTimeS[$Flow]","$FTimeR[$Flow]");
+			$Retval =  time_cmp("$CTime[1]","$CTime[2]",
+			                    "$FTimeS[$Flow]","$FTimeR[$Flow]");
+
+			if( $Retval < 0 ) {
+			print "ERROR: timelabels do not match!\n";
+			} elsif( $Retval > 0 ){
+				while( $Retval > 0 ){
+					$RTime = time_calc("$STime[1]","$STime[2]",
+						               "$FTimeS[$Flow]","$FTimeR[$Flow]");
+					print OUTPUT sprintf("%d\t%.4f\t%d\t%d\t%d\t%d\n",
+					                     $Flow,$RTime,
+					                     $FSample[$Flow]*$Parse::LSpeed,
+					                     $FTotal[$Flow],$FCount[$Flow],$Seq);
+					$FSample[$Flow] = 0;
+					$FTimeR[$Flow]  = sprintf("%06d",
+					$FTimeR[$Flow]+$Parse::Step);
+
+					if ($FTimeR[$Flow] > 999999){
+						$FTimeR[$Flow] = sprintf("%06d",$FTimeR[$Flow]-1000000);
+						$FTimeS[$Flow] += 1;
+					}
+
+					$Retval = time_cmp("$CTime[1]","$CTime[2]",
+					                   "$FTimeS[$Flow]","$FTimeR[$Flow]");
+				}
+				$FSample[$Flow] = $Size;
+				$FTotal[$Flow] += $Size;
+				$FCount[$Flow] += 1;
+			} else {
+				$FSample[$Flow] += $Size;
+				$FTotal[$Flow]  += $Size;
+				$FCount[$Flow]  += 1;
+			}
+			$Loop += 1;
+			close OUTPUT;
+		} else {
+			print "ERROR: invalid input line!\n";
 		}
-		$FSample[$Flow] = $Size;
-		$FTotal[$Flow] += $Size;
-		$FCount[$Flow] += 1;
-	    } else {
-		$FSample[$Flow] += $Size;
-		$FTotal[$Flow]  += $Size;
-		$FCount[$Flow]  += 1;
-	    }
-	    $Loop          += 1;
-	    close OUTPUT;
-	} else {
-	    print "ERROR: invalid input line!\n";
-	}
-    } # End Of While
+	} # End Of While
 #
 # FIXME: Print out the left over data (form last sample, that is not finished)
 #
