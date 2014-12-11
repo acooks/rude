@@ -19,15 +19,17 @@ mandir        = @mandir@/man8
 sbindir       = @sbindir@
 srcdir        = @srcdir@
 
-INSTALL  = @INSTALL@ -o root -g root -m 0755
-VPATH    = @srcdir@
+BININSTALL    = @INSTALL@ -o root -g root -m 0755
+MANINSTALL    = @INSTALL@ -o root -g root -m 0644
+VERSION       = @PACKAGE_VERSION@
+VPATH         = @srcdir@
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@
-LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
-LIBS     = @LIBS@
-MAN8     = crude.8
+CC            = @CC@
+CFLAGS        = @CFLAGS@
+LDFLAGS       = @LDFLAGS@
+DEFS          = @DEFS@
+LIBS          = @LIBS@
+MAN8          = crude.8
 
 CRUDE_OBJS = main.o ../rude/mcast.o
 
@@ -43,14 +45,24 @@ crude:	$(CRUDE_OBJS)
 	$(CC) $(CFLAGS) $(LIBS) $(DEFS) $(LDFLAGS) -o crude $(CRUDE_OBJS)
 
 clean:
-	rm -f *~ *.o crude
+	rm -f *~ *.o *.rpm *.deb crude
 
 distclean:
-	rm -f *~ *.o crude Makefile
+	rm -f *~ *.o *.rpm *.deb crude Makefile
 
 install: crude
 	@if [ ! -d $(bindir) ]; then mkdir -m 0755 $(bindir); fi;
-	$(INSTALL) crude $(bindir)
+	$(BININSTALL) crude $(bindir)
 	@if [ ! -d $(mandir) ]; then mkdir -m 0755 $(mandir); fi;
-	$(INSTALL) crude.8 $(mandir)
+	$(MANINSTALL) crude.8 $(mandir)
+
+rpm deb: | crude
+	fpm -s dir -t $@ -n crude -v $(VERSION) \
+		--replaces crude \
+		--description "collector for rude (real-time UDP data emitter)" \
+		--url "http://rude.sourceforge.net" \
+		crude=$(bindir)/crude \
+		crude.8=$(mandir)/crude.8 \
+
+
 ##############################################################################

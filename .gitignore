@@ -1,4 +1,6 @@
 *.o
+*.rpm
+*.deb
 *~
 /crude/crude
 /rude/rude

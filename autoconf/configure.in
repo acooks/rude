@@ -11,7 +11,7 @@
 ##############################################################################
 
 # Process any command-line arguments and find the source code directory
-AC_INIT(rude/main.c)
+AC_INIT([RUDE and CRUDE], m4_esyscmd([grep VERSION include/rude.h | cut -d\" -f2 | tr -d '\n']))
 
 # Set the auxilary directory, make and install
 AC_CONFIG_AUX_DIR(autoconf)

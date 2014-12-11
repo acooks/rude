@@ -19,15 +19,17 @@ mandir        = @mandir@/man8
 sbindir       = @sbindir@
 srcdir        = @srcdir@
 
-INSTALL  = @INSTALL@ -o root -g root -m 0755
-VPATH    = @srcdir@
+BININSTALL    = @INSTALL@ -o root -g root -m 0755
+MANINSTALL    = @INSTALL@ -o root -g root -m 0644
+VERSION       = @PACKAGE_VERSION@
+VPATH         = @srcdir@
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@
-LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
-LIBS     = @LIBS@
-MAN8     = rude.8
+CC            = @CC@
+CFLAGS        = @CFLAGS@
+LDFLAGS       = @LDFLAGS@
+DEFS          = @DEFS@
+LIBS          = @LIBS@
+MAN8          = rude.8
 
 RUDE_OBJS = flow_cntl.o flow_txmit.o main.o parse.o mcast.o
 
@@ -43,16 +45,24 @@ rude:	$(RUDE_OBJS)
 	$(CC) $(CFLAGS) $(LIBS) $(DEFS) $(LDFLAGS) -o rude $(RUDE_OBJS)
 
 clean:
-	rm -f *~ *.o rude
+	rm -f *~ *.o *.rpm *.deb rude
 
 distclean:
-	rm -f *~ *.o rude Makefile
+	rm -f *~ *.o *.rpm *.deb rude Makefile
 
 install: rude
 	@if [ ! -d $(bindir) ]; then mkdir -m 0755 $(bindir); fi;
-	$(INSTALL) rude $(bindir)
+	$(BININSTALL) rude $(bindir)
 	@if [ ! -d $(mandir) ]; then mkdir -m 0755 $(mandir); fi;
-	$(INSTALL) rude.8 $(mandir)
+	$(MANINSTALL) rude.8 $(mandir)
+
+rpm deb: | rude
+	fpm -s dir -t $@ -n rude -v $(VERSION) \
+		--replaces rude \
+		--description "real-time UDP data emitter" \
+		--url "http://rude.sourceforge.net" \
+		rude=$(bindir)/rude \
+		rude.8=$(mandir)/rude.8 \
  
 
 ##############################################################################

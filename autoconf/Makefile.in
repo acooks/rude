@@ -18,6 +18,16 @@ all:
 		(cd $$i && $(MAKE) all) \
 	done
 
+rpm:
+	@for i in $(SUBDIRS); do \
+		(cd $$i && $(MAKE) rpm) \
+	done
+
+deb:
+	@for i in $(SUBDIRS); do \
+		(cd $$i && $(MAKE) deb) \
+	done
+
 clean:
 	rm -f *~ config.cache config.log config.status
 	@for i in $(SUBDIRS); do \
