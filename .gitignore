@@ -1,13 +1,16 @@
 *.o
-crude/crude
-rude/rude
+*~
+/crude/crude
+/rude/rude
 
-autom4te.cache/
-autoconf/config.hin
-configure
-crude/Makefile
-include/config.h
-include/stamp.h
-rude/Makefile
-Makefile
+/autom4te.cache/
+/autoconf/config.hin
+/configure
+/config.log
+/config.status
+/crude/Makefile
+/include/config.h
+/include/stamp.h
+/rude/Makefile
+/Makefile
 
