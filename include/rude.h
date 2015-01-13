@@ -26,6 +26,7 @@
 
 #include <netinet/in.h>  /* for struct sockaddr_in */
 #include <sys/time.h>    /* for struct timeval     */
+#include <stdint.h>
 
 #define DNMAXLEN 128
 #define TMAXLEN  32
@@ -34,7 +35,7 @@
 #define PMAXSIZE 32768  /* Maximum accepted UDP-data field/packet size      */
 #define MINDURAT 0.001  /* Minimum allowed flow duration in seconds (float) */
 
-#define VERSION "0.8"
+#define VERSION "0.8.3"
 
 /*
  * Enumeration definition for different (known) flow types
@@ -85,8 +86,8 @@ struct flow_cfg {
   int                 send_sock;	       /* Socket to be used by this flow */
 
 	
-  long int            flow_id;          /* Flow IDENTIFICATION number     */
-  unsigned short      flow_sport;       /* Flow SOURCE PORT number        */
+  uint32_t            flow_id;          /* Flow IDENTIFICATION number     */
+  uint16_t            flow_sport;       /* Flow SOURCE PORT number        */
   struct timeval      flow_start;       /* Absolute flow cmd START TIME   */
   struct timeval      flow_stop;        /* Absolute flow cmd END TIME     */
   struct timeval      next_tx;          /* Absolute next packet TX TIME   */
@@ -112,10 +113,10 @@ struct flow_cfg {
  * Wrapper structure that helps filling the "header" to the buffer
  */
 struct udp_data{
-  unsigned long sequence_number;
-  unsigned long tx_time_seconds; 
-  unsigned long tx_time_useconds; 
-  unsigned long flow_id;
+  uint32_t sequence_number;
+  uint32_t tx_time_seconds; 
+  uint32_t tx_time_useconds; 
+  uint32_t flow_id;
   struct sockaddr_storage dest_addr;
 }__attribute__ ((packed));
 
@@ -124,13 +125,13 @@ struct udp_data{
  * Structure used by the CRUDE
  */
 struct crude_struct{
-  unsigned long  rx_time_seconds;
-  unsigned long  rx_time_useconds;
+  uint32_t  rx_time_seconds;
+  uint32_t  rx_time_useconds;
   //struct in6_addr  src_addr;
-  long           pkt_size;
+  uint32_t           pkt_size;
   struct sockaddr_storage src; 
 	//unsigned short src_port;
-  unsigned short dest_port;
+  uint16_t dest_port;
 };
 
  
