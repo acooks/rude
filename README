@@ -39,43 +39,17 @@ INTRODUCTION (very short):
 COMPILATION AND INSTALLATION INSTRUCTIONS:
 ------------------------------------------
 
- In order to compile this software, you need a compiler.  How you can
- obtain a compiler depends on your operating system.  on Debian,
- for example, you need to run
- `apt-get install build-essential git automake autoconf`.
+ 1. Before you can compile the program you should make the configuration
+     script(s) and other files with the GNU autotools.
+    In other words you require properly installed `autoconf` package.
 
- You can get the code by running
- `git clone https://scm.uninett.no/yorn/rude.git`.
- This will create a new folder named `rude`.
- If you run into certificate problems and you're on Debian, you may be on
- a version that is so basic it's missing the root CA's.  You can install
- these by running `apt get install ca-certificates`.
- 
- 1. This package you have received should contain the automatic 'configure'
-    script in the source code root directory. If this is true you can jump
-    into the step 4. Otherwise read also the steps 2. and 3. that explain
-    the procedure how to create the configure script with the GNU autoconf
-    utilities.
-
-
- 2. So you have the very clean version. Alright. Before you can compile
-    the program you should make the configuration script(s) and other
-    files with the GNU autoconf utilities. In other words you require
-    properly installed `autoheader` and `autoconf` programs. At least
-    version 2.13 of the GNU autoconf tools seems to work fine.
-    [ After those programs are installed you can move on.... ]
-
-
- 3. You need to generate some header file(s) and the configuration script
+ 2. You need to generate some header file(s) and the configuration script
     with the following commands (you must be in the project's root
-    directory, right outside the DOC folder):
+    directory):
 
-	autoheader autoconf/configure.in
-	autoconf autoconf/configure.in > configure
-	chmod 755 configure
+	autoreconf
 
-
- 4. Now you are ready to go on and configure this software package. As
+ 3. Now you are ready to go on and configure this software package. As
     usual, you can say `./configure --help` to get the full list of
     configuring switches. Here are only the usually required options:
 
@@ -93,22 +67,15 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
   --datarootdir setting.  You can safely ignore this warning.
 
 
- 5. 'make all'
+ 4. 'make all'
 
     This command will create the executables
     `rude/rude` and `crude/crude`.
-    So far this program is tested on Linux and Solaris2.6 OS's and
-    seems to compile/operate without any major drawbacks. Your mileage
-    may vary...
-
 
  6. 'make install'
 
     This command will install the executables on the filesystem.
-    USE MANUAL INSTALLATION IF THIS FAILS. SORRY 'BOUT THAT :)
     Only ROOT can successfully execute this command.
-
- ...and that's it.
 
 
 EXAMPLES AND SOME HELPER APPLICATIONS
