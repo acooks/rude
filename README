@@ -41,7 +41,7 @@ COMPILATION AND INSTALLATION INSTRUCTIONS:
 
  1. Before you can compile the program you should make the configuration
      script(s) and other files with the GNU autotools.
-    In other words you require properly installed `autoconf` package.
+    The `autoconf` and `automake` packages are required.
 
  2. You need to generate some header file(s) and the configuration script
     with the following commands (you must be in the project's root
