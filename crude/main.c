@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -120,7 +121,7 @@ int main(int argc, char **argv)
 	       "under GNU GENERAL PUBLIC LICENSE Version 2.\n",VERSION);
 
 	struct sockaddr_storage test;
-	printf("Size of sockaddr_storage: %d ss_len:%d \n",sizeof(test),sizeof(test.ss_family));
+	printf("Size of sockaddr_storage: %lu ss_len: %lu \n",sizeof(test),sizeof(test.ss_family));
 
 	while((retval >= 0) &&
 				((cmd_char = getopt(argc,argv,"hvd:p:i:l:P:n:s:6D:")) != EOF))

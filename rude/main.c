@@ -32,6 +32,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -440,7 +441,7 @@ static void print_results(void)
 		switch ((flow->dst).ss_family) {
 			case AF_INET:{
 					struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
-					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
+					fprintf(stderr,"%"PRIu32" %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
 						flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
 						flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
 						flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
@@ -450,7 +451,7 @@ static void print_results(void)
 				break;
 			case AF_INET6:{
 					struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
-					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
+					fprintf(stderr,"%"PRIu32" %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
 						flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
 						flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
 						flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
@@ -459,7 +460,7 @@ static void print_results(void)
 				}
 				break;
 			default:
-				fprintf(stderr,"Protocol is not known:%s ",(flow->dst).ss_family);
+				fprintf(stderr,"Protocol is not known:%d ",(flow->dst).ss_family);
 		}
 
 		switch(flow->params.ftype){
@@ -501,14 +502,14 @@ static int open_sockets(void)
 			inet_ntop(AF_INET6,&((struct sockaddr_in6 *)&our_addr)->sin6_addr,addr,sizeof(addr));
 			RUDEBUG7("open_socket(): using address: %s\n",addr);
 			if((flow->send_sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0){
-				RUDEBUG1("open_sockets() - socket() failed for flow %ld: %s\n",
+				RUDEBUG1("open_sockets() - socket() failed for flow %"PRIu32": %s\n",
 				flow->flow_id,strerror(errno));
 				retval--;
 				goto socket_error;
 			}
 			//check if packet_size is enough
 			if(flow->params.cbr.psize < PMINSIZE_V6){
-				RUDEBUG1("open_sockets() - additional check for ipv6 packet size failed, flow %ld, minimal size is %d\n",
+				RUDEBUG1("open_sockets() - additional check for ipv6 packet size failed, flow %"PRIu32", minimal size is %d\n",
 				flow->flow_id,PMINSIZE_V6);
 				retval--;
 				goto socket_error;
@@ -523,7 +524,7 @@ static int open_sockets(void)
 			inet_ntop(AF_INET,&((struct sockaddr_in *)&our_addr)->sin_addr,addr,sizeof(addr));
 			RUDEBUG7("open_socket(): using address: %s\n",addr);
 			if((flow->send_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-				RUDEBUG1("open_sockets() - socket() failed for flow %ld: %s\n",
+				RUDEBUG1("open_sockets() - socket() failed for flow %"PRIu32": %s\n",
 				flow->flow_id,strerror(errno));
 					retval--;
 					goto socket_error;
@@ -588,7 +589,7 @@ static int open_sockets(void)
 		if(bind(flow->send_sock, (struct sockaddr *)&our_addr, sizeof(struct sockaddr_in6)) < 0){
 			close(flow->send_sock);
 			flow->send_sock = 0;
-			RUDEBUG1("open_sockets() - bind() failed for flow %ld: %s\n",
+			RUDEBUG1("open_sockets() - bind() failed for flow %"PRIu32": %s\n",
 			         flow->flow_id,strerror(errno));
 			retval--;
 			goto socket_error;
@@ -608,7 +609,7 @@ static int open_sockets(void)
 		if(flow->tos > 0){
 			tos = (unsigned char) flow->tos;
 			if(setsockopt(flow->send_sock, SOL_IP, IP_TOS, &tos, sizeof(tos)) == -1){
-				RUDEBUG1("Can't set TOS for flow %ld: using default...\n",
+				RUDEBUG1("Can't set TOS for flow %"PRIu32": using default...\n",
 								 flow->flow_id);
 			}
 		}

@@ -62,6 +62,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <inttypes.h>
 
 
 /*
@@ -492,7 +493,7 @@ int flow_off(struct flow_cfg *target, long int time)
 
 	/* Check if the OFF time is already set! */
 	if((temp->flow_stop.tv_sec != 0) || (temp->flow_stop.tv_usec !=0)){
-		RUDEBUG1("flow_off() - STOP already set (id=%ld)\n",temp->flow_id);
+		RUDEBUG1("flow_off() - STOP already set (id=%"PRIu32")\n",temp->flow_id);
 		return(-1);
 	}
 
@@ -504,7 +505,7 @@ int flow_off(struct flow_cfg *target, long int time)
 	/* Do sanity check */
 	if(timercmp(&temp->flow_stop,&temp->flow_start,<)){
 		temp->flow_stop = temp->flow_start;
-		RUDEBUG1("flow_off() - STOP < START time (id=%ld)\n",temp->flow_id);
+		RUDEBUG1("flow_off() - STOP < START time (id=%"PRIu32")\n",temp->flow_id);
 		return(-2);
 	}
 
@@ -550,7 +551,7 @@ int flow_modify(struct flow_cfg *target, char *buffer)
 	while(temp->mod_flow != NULL){ temp = temp->mod_flow; }
 	if(flow_off(temp,time) < 0){
 		free(mod);
-		RUDEBUG1("flow_modify() - start time error (id=%ld)\n",target->flow_id);
+		RUDEBUG1("flow_modify() - start time error (id=%"PRIu32")\n",target->flow_id);
 		return(-4);
 	}
 
@@ -564,12 +565,12 @@ int flow_modify(struct flow_cfg *target, char *buffer)
 	case(CBR):
 		if(2 != sscanf(buffer,"%*d %*d %*10s %*31s %ld %ld", &rate, &psize)){
 			free(mod);
-			RUDEBUG1("flow_modify() - invalid (number of) CBR args (id=%ld)\n",
+			RUDEBUG1("flow_modify() - invalid (number of) CBR args (id=%"PRIu32")\n",
 			         temp->flow_id);
 			return(-4);
 		} else if((rate < 0) || (psize < PMINSIZE) || (psize > PMAXSIZE)){
 			free(mod);
-			RUDEBUG1("flow_modify() - invalid CBR arguments (id=%ld)\n",
+			RUDEBUG1("flow_modify() - invalid CBR arguments (id=%"PRIu32")\n",
 			         temp->flow_id);
 			return(-4);
 		}
@@ -790,7 +791,7 @@ int read_cfg(FILE *infile)
 	while(temp != NULL){
 		if((temp->flow_stop.tv_sec == 0) && (temp->flow_stop.tv_usec == 0)){
 			errors--;
-			RUDEBUG1("read_cfg() - no STOP time for flow id=%ld\n",temp->flow_id);
+			RUDEBUG1("read_cfg() - no STOP time for flow id=%"PRIu32"\n",temp->flow_id);
 		}
 
 		switch(temp->params.ftype){
