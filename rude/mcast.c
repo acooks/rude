@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 

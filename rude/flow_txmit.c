@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sched.h>
+#include <time.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/types.h>

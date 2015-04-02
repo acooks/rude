@@ -42,7 +42,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <limits.h>
-
+#include <net/if.h>
 
 /*
  * Private struct for each flow of runtime statistics
