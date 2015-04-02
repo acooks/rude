@@ -375,7 +375,7 @@ int flow_on(char *buffer)
 			}
 		}
 
-		if(ch2 = strchr(ch,':')){
+		if((ch2 = strchr(ch,':'))){
 			if((*(++ch2)=='4') ||(*ch2 =='6')){
 				prefferedVersion = *ch2;
 				RUDEBUG7("Preffered version: %c\n",*ch2);
