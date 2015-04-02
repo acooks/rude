@@ -428,11 +428,11 @@ int flow_on(char *buffer)
 				return(-4);
 			}
 			//read next two optional parameters
-			if((1 != sscanf(buffer,"%*d %*d %*10s %*30s %*127s %*31s %*ld %*ld %ld",
+			if((1 != sscanf(buffer,"%*d %*d %*10s %*30s %*127s %*31s %*d %*d %ld",
 				&package_size)) || (package_size < 0)) {
 				package_size = 1;
 			}
-			if((1 != sscanf(buffer,"%*d %*d %*10s %*30s %*127s %*31s %*ld %*ld %*ld %ld",
+			if((1 != sscanf(buffer,"%*d %*d %*10s %*30s %*127s %*31s %*d %*d %*d %ld",
 				&time_period)) || (time_period< 0)) {
 				time_period = 1;
 			}
@@ -575,11 +575,11 @@ int flow_modify(struct flow_cfg *target, char *buffer)
 			return(-4);
 		}
 	//read next two optional parameters
-	if((1 != sscanf(buffer,"%*d %*d %*10s %*31s %*ld %*ld %ld",
+	if((1 != sscanf(buffer,"%*d %*d %*10s %*31s %*d %*d %ld",
 		&package_size)) || (package_size < 0)) {
 		package_size = 1;
 		}
-	if((1 != sscanf(buffer,"%*d %*d %*10s %*31s %*ld %*ld %*ld %ld",
+	if((1 != sscanf(buffer,"%*d %*d %*10s %*31s %*d %*d %*d %ld",
 		&time_period)) || (time_period< 0)) {
 		time_period = 1;
 		}
