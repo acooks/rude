@@ -745,8 +745,9 @@ static int runtime_stats(unsigned short port, unsigned long limit)
 			}  /* Now both jitter components are positive */
 			fsp->js_sec += jitter_s;
 			fsp->js_usec += jitter_us;
-			if (jitter_s > fsp->max_jitter_sec ||
-					jitter_s == fsp->max_jitter_sec && jitter_us > fsp->max_jitter_usec)
+			if ((jitter_s > fsp->max_jitter_sec)
+			    || ((jitter_s == fsp->max_jitter_sec)
+			    && (jitter_us > fsp->max_jitter_usec)))
 			{
 				fsp->max_jitter_sec = jitter_s;
 				fsp->max_jitter_usec = jitter_us;
