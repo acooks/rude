@@ -21,16 +21,18 @@
  *                 Sampo Saaristo <sambo@cc.tut.fi>
  *
  *****************************************************************************/
+#define _POSIX_C_SOURCE 200809L
+
 #include <config.h>
 #include <rude.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include <time.h>
+#include "timespec_ops.h"
 
 /* Introduce our global variables */
 extern char            *buffer;
@@ -96,26 +98,29 @@ struct flow_cfg *find_next(void)
 	struct flow_cfg *flow   = head;
 	struct flow_cfg *prev   = NULL;
 	struct flow_cfg *target = NULL;
-	struct timeval   now;
+	struct timespec  now;
 
 	/* Get the current time */
-	gettimeofday(&now, NULL);
+	clock_gettime(CLOCK_MONOTONIC, &now);
 
 	/* Find the next flow from which should send the packet */
-	while(flow){
-		/* Remove the flows that are already "done". The remove_flow() */
-		/* function modifies the active and passive lists (pointed by  */
-		/* head and done respectively)...                              */
-		if(timercmp(&flow->flow_stop,&now,<) ||
-			timercmp(&flow->next_tx,&flow->flow_stop,>)){
+	while (flow) {
+		/* Remove the flows that are "done". The remove_flow()     */
+		/* function modifies active and passive lists (pointed by  */
+		/* head and done respectively).                            */
+		if (timespeccmp(&flow->flow_stop, &now, <)
+		    || timespeccmp(&flow->next_tx, &flow->flow_stop, >))
+		{
 			remove_flow(flow);
 			if(prev != NULL){ flow = prev->next; }
 			else { flow = head; }
 			continue;
 		}
 
-		/* Mark the current flow as target, if certain conditions are met... */
-		if((target == NULL) || (timercmp(&flow->next_tx,&target->next_tx,<))){
+		/* Mark the current flow as target, if conditions are met. */
+		if ((target == NULL)
+		    || (timespeccmp(&flow->next_tx, &target->next_tx, <)))
+		{
 			target = flow;
 		}
 		prev = flow;

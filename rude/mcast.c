@@ -8,6 +8,8 @@
 * Copyright: See COPYING file that comes with this distribution
 *
 */
+#define _DEFAULT_SOURCE 1
+
 #include <mcast.h>
 #include <rude.h>
 

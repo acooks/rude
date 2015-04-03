@@ -49,6 +49,8 @@
  *  After the "box" has been executed it will be removed and placed to
  *  the other list pointed by "*done" for (possible) later examination.
  *****************************************************************************/
+#define _DEFAULT_SOURCE 1
+
 #include <config.h>
 #include <rude.h>
 
@@ -63,13 +65,13 @@
 #include <stdio.h>
 #include <errno.h>
 #include <inttypes.h>
-
+#include "timespec_ops.h"
 
 /*
  * Global variables/functions defined elsewhere and used in this file.
  */
 extern struct flow_cfg *head;
-extern struct timeval  tester_start;
+extern struct timespec tester_start;
 extern int             max_packet_size;
 
 extern void            send_cbr(struct flow_cfg *);   /* flow_txmit.c */
@@ -78,7 +80,7 @@ extern void            send_trace(struct flow_cfg *); /* flow_txmit.c */
 /*
  * Function that locates the 1st element for specific flow (if any)
  */
-__inline__ struct flow_cfg *find_flow_id(long int id)
+struct flow_cfg *find_flow_id(long int id)
 {
 	struct flow_cfg *temp = head;
 
@@ -313,7 +315,7 @@ void trace_parse(char *buffer, struct trace_params *par)
 		}
 		par->list[i].psize        = p_size;
 		par->list[i].wait.tv_sec  = time1;
-		par->list[i].wait.tv_usec = time2;
+		par->list[i].wait.tv_nsec = time2 * 1000;
 
 		if(p_size > par->max_psize){ par->max_psize = p_size; }
 		RUDEBUG7("trace_parse() - %u/%u (psize=%d wait=%ld.%06ld)\n",
@@ -334,7 +336,7 @@ int flow_on(char *buffer)
 {
 	struct flow_cfg *new  = NULL;
 	struct flow_cfg *temp = NULL;
-	struct timeval  stime = {0,0};
+	struct timespec stime = {0,0};
 	f_type typenum        = UNKNOWN;
 	unsigned short sport  = 0;
 	char dst[DNMAXLEN],type[TMAXLEN];
@@ -406,11 +408,11 @@ int flow_on(char *buffer)
 		return(-3);
 	}
 
-	/* Calculate the time to timeval structure amd set the START and */
+	/* Calculate the time to timespec and set the START and */
 	/* 1st packet transmission time...                               */
 	stime.tv_sec  = (time/1000);
-	stime.tv_usec = ((time-(stime.tv_sec*1000))*1000);
-	timeradd(&stime,&tester_start,&new->flow_start);
+	stime.tv_nsec = ((time - (stime.tv_sec * 1000)) * 1000000);
+	timespecadd(&stime, &tester_start, &new->flow_start);
 	new->next_tx = new->flow_start;
 
 	switch(typenum){
@@ -486,24 +488,24 @@ int flow_on(char *buffer)
 int flow_off(struct flow_cfg *target, long int time)
 {
 	struct flow_cfg *temp = target;
-	struct timeval  otime = {0,0};
+	struct timespec otime = {0,0};
 
 	/* Find the last object for this flow */
 	while(temp->mod_flow != NULL){ temp = temp->mod_flow; }
 
 	/* Check if the OFF time is already set! */
-	if((temp->flow_stop.tv_sec != 0) || (temp->flow_stop.tv_usec !=0)){
+	if ((temp->flow_stop.tv_sec != 0) || (temp->flow_stop.tv_nsec != 0)) {
 		RUDEBUG1("flow_off() - STOP already set (id=%"PRIu32")\n",temp->flow_id);
 		return(-1);
 	}
 
-	/* Calculate the time to timeval structure and set the STOP time */
-	otime.tv_sec  = (time/1000);
-	otime.tv_usec = ((time-(otime.tv_sec*1000))*1000);
-	timeradd(&otime,&tester_start,&temp->flow_stop);
+	/* Calculate the time to timespec and set the STOP time */
+	otime.tv_sec  = (time / 1000);
+	otime.tv_nsec = ((time - (otime.tv_sec * 1000)) * 1000000);
+	timespecadd(&otime, &tester_start, &temp->flow_stop);
 
 	/* Do sanity check */
-	if(timercmp(&temp->flow_stop,&temp->flow_start,<)){
+	if (timespeccmp(&temp->flow_stop, &temp->flow_start, <)) {
 		temp->flow_stop = temp->flow_start;
 		RUDEBUG1("flow_off() - STOP < START time (id=%"PRIu32")\n",temp->flow_id);
 		return(-2);
@@ -521,7 +523,7 @@ int flow_modify(struct flow_cfg *target, char *buffer)
 {
 	struct flow_cfg *mod  = NULL;
 	struct flow_cfg *temp = target;
-	struct timeval  mtime = {0,0};
+	struct timespec mtime = {0,0};
 	f_type typenum        = UNKNOWN;
 	long int time,rate,psize,package_size,time_period;
 	char type[TMAXLEN];
@@ -555,10 +557,10 @@ int flow_modify(struct flow_cfg *target, char *buffer)
 		return(-4);
 	}
 
-	/* Calculate the time to timeval structure and set the START time */
-	mtime.tv_sec  = (time/1000);
-	mtime.tv_usec = ((time-(mtime.tv_sec*1000))*1000);
-	timeradd(&mtime,&tester_start,&mod->flow_start);
+	/* Calculate the time to timespec and set the START time */
+	mtime.tv_sec  = (time / 1000);
+	mtime.tv_nsec = ((time - (mtime.tv_sec * 1000)) * 1000000);
+	timespecadd(&mtime, &tester_start, &mod->flow_start);
 	mod->next_tx = mod->flow_start;
 
 	switch(typenum){
@@ -642,7 +644,7 @@ int start_time(long int hour, long int min, long int sec)
 
 	/* Get the current time and do the calculations... */
 	time(&current);
-	gettimeofday(&tester_start,NULL);
+	clock_gettime(CLOCK_MONOTONIC, &tester_start);
 	memcpy(&c_time,localtime(&current),sizeof(struct tm));
 
 	/* Set the struct for the real START time */
@@ -704,7 +706,7 @@ int read_cfg(FILE *infile)
 				errors--;
 				RUDEBUG1("read_cfg() - START already set error\n");
 						} else {
-				gettimeofday(&tester_start,NULL);
+				clock_gettime(CLOCK_MONOTONIC, &tester_start);
 				start_set = 1;
 				commands++;
 			}
@@ -789,7 +791,7 @@ int read_cfg(FILE *infile)
 	/* Check that every flow block has Stop time set and set max_packet size */
 	tmp = temp = head;
 	while(temp != NULL){
-		if((temp->flow_stop.tv_sec == 0) && (temp->flow_stop.tv_usec == 0)){
+		if((temp->flow_stop.tv_sec == 0) && (temp->flow_stop.tv_nsec == 0)){
 			errors--;
 			RUDEBUG1("read_cfg() - no STOP time for flow id=%"PRIu32"\n",temp->flow_id);
 		}

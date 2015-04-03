@@ -25,8 +25,8 @@
 #define _RUDE_H
 
 #include <netinet/in.h>  /* for struct sockaddr_in */
-#include <sys/time.h>    /* for struct timeval     */
 #include <stdint.h>
+#include <time.h>
 
 #define DNMAXLEN 128
 #define TMAXLEN  32
@@ -64,7 +64,7 @@ struct cbr_params{
  */
 struct trace_list{
   int    psize;                        /* XMITTED PACKET SIZE        */
-  struct timeval wait;                 /* TIME TO WAIT FOT NEXT XMIT */
+  struct timespec wait;                /* TIME TO WAIT FOT NEXT XMIT */
 };
 
 struct trace_params{
@@ -88,9 +88,9 @@ struct flow_cfg {
 	
   uint32_t            flow_id;          /* Flow IDENTIFICATION number     */
   uint16_t            flow_sport;       /* Flow SOURCE PORT number        */
-  struct timeval      flow_start;       /* Absolute flow cmd START TIME   */
-  struct timeval      flow_stop;        /* Absolute flow cmd END TIME     */
-  struct timeval      next_tx;          /* Absolute next packet TX TIME   */
+  struct timespec     flow_start;       /* Absolute flow cmd START TIME   */
+  struct timespec     flow_stop;        /* Absolute flow cmd END TIME     */
+  struct timespec     next_tx;          /* Absolute next packet TX TIME   */
 
   void (*send_func)(struct flow_cfg*); /* TX function for this flow */
 
@@ -114,8 +114,8 @@ struct flow_cfg {
  */
 struct udp_data{
   uint32_t sequence_number;
-  uint32_t tx_time_seconds; 
-  uint32_t tx_time_useconds; 
+  uint32_t tx_time_seconds;
+  uint32_t tx_time_nsec;
   uint32_t flow_id;
   struct sockaddr_storage dest_addr;
 }__attribute__ ((packed));
@@ -126,7 +126,7 @@ struct udp_data{
  */
 struct crude_struct{
   uint32_t  rx_time_seconds;
-  uint32_t  rx_time_useconds;
+  uint32_t  rx_time_nsec;
   //struct in6_addr  src_addr;
   uint32_t           pkt_size;
   struct sockaddr_storage src; 
@@ -150,31 +150,6 @@ struct crude_struct{
 #  define RUDEBUG7(msg...) {}
 #endif
 
-/* Some macro definitions. Added for non-Linux systems :) */
-#ifndef timeradd
-#define timeradd(a, b, result)                           \
-  do {                                                   \
-    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;        \
-    (result)->tv_usec = (a)->tv_usec + (b)->tv_usec;     \
-    if ((result)->tv_usec >= 1000000)                    \
-      {                                                  \
-        ++(result)->tv_sec;                              \
-        (result)->tv_usec -= 1000000;                    \
-      }                                                  \
-  } while (0)
-#endif
 
-#ifndef timespecsub
-  #define	timespecsub(tsp, usp, vsp)					\
-	do {								\
-		(vsp)->tv_sec = (tsp)->tv_sec - (usp)->tv_sec;		\
-		(vsp)->tv_nsec = (tsp)->tv_nsec - (usp)->tv_nsec;	\
-		if ((vsp)->tv_nsec < 0) {				\
-			(vsp)->tv_sec--;				\
-			(vsp)->tv_nsec += 1000000000L;			\
-		}							\
-	} while (0)
-#endif
-  
-  
+
 #endif /* _RUDE_H */

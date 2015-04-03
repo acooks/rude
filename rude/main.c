@@ -21,6 +21,8 @@
  *                 Sampo Saaristo <sambo@cc.tut.fi>
  *
  *****************************************************************************/
+#define _DEFAULT_SOURCE 1
+
 #include <config.h>
 #include <rude.h>
 #include <mcast.h>
@@ -42,7 +44,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
- #include <net/if.h>
+#include <net/if.h>
+#include "timespec_ops.h"
 
 /*
  *  Function prototypes
@@ -64,7 +67,7 @@ extern struct flow_cfg* find_next(void);   /* flow_cntl.c */
  */
 struct flow_cfg *head        = NULL;   /* Our global linked list            */
 struct flow_cfg *done        = NULL;   /* Our 2nd global linked list        */
-struct timeval  tester_start = {0,0};  /* Absolute process START TIME       */
+struct timespec tester_start = {0,0};  /* Absolute process START TIME       */
 struct udp_data *data        = NULL;   /* */
 char *buffer                 = NULL;   /* */
 int max_packet_size          = 0;      /* Size of the largest packet        */
@@ -318,7 +321,7 @@ static void dump_config(void)
 	if(flow != NULL){
 		fprintf(stderr,"RUDE START = %ld.%06ld\n\nF_ID: F_START: F_STOP: "
 			"F_SPORT: F_DADD: F_DPORT: F_TYPE: [+ type params]\n",
-			tester_start.tv_sec,tester_start.tv_usec);
+			tester_start.tv_sec, tester_start.tv_nsec);
 	}
 
 	while(flow_m != NULL){
@@ -326,8 +329,8 @@ static void dump_config(void)
 			case AF_INET:{
 					struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
 					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu ",
-					        flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
-					        flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+					        flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_nsec,
+					        flow->flow_stop.tv_sec, flow->flow_stop.tv_nsec,
 					        flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
 					ntohs(dstin->sin_port));
 				}
@@ -335,8 +338,8 @@ static void dump_config(void)
 				case AF_INET6:{
 					struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
 					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu ",
-						flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
-						flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+						flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_nsec,
+						flow->flow_stop.tv_sec, flow->flow_stop.tv_nsec,
 						flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
 				ntohs(dstin->sin6_port));
 				}
@@ -381,8 +384,8 @@ static void dump_config(void)
 			case AF_INET:{
 					struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
 					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
-					        flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
-					        flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+					        flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_nsec,
+					        flow->flow_stop.tv_sec, flow->flow_stop.tv_nsec,
 					        flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
 					        ntohs(dstin->sin_port),flow->errors, flow->success,
 					        flow->sequence_nmbr);
@@ -391,8 +394,8 @@ static void dump_config(void)
 			case AF_INET6:{
 					struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
 					fprintf(stderr,"%ld %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
-					        flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
-					        flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+					        flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_nsec,
+					        flow->flow_stop.tv_sec, flow->flow_stop.tv_nsec,
 					        flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
 					        ntohs(dstin->sin6_port),flow->errors, flow->success,
 					        flow->sequence_nmbr);
@@ -442,8 +445,8 @@ static void print_results(void)
 			case AF_INET:{
 					struct sockaddr_in* dstin = (struct sockaddr_in *)&(flow->dst);
 					fprintf(stderr,"%"PRIu32" %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
-						flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
-						flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+						flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_nsec,
+						flow->flow_stop.tv_sec, flow->flow_stop.tv_nsec,
 						flow->flow_sport,inet_ntop(AF_INET, &(dstin->sin_addr), straddr, INET_ADDRSTRLEN),
 						ntohs(dstin->sin_port),flow->errors, flow->success,
 						flow->sequence_nmbr);
@@ -452,8 +455,8 @@ static void print_results(void)
 			case AF_INET6:{
 					struct sockaddr_in6* dstin = (struct sockaddr_in6 *)&(flow->dst);
 					fprintf(stderr,"%"PRIu32" %ld.%06ld %ld.%06ld %hu %s %hu %d %d %d ",
-						flow->flow_id, flow->flow_start.tv_sec,flow->flow_start.tv_usec,
-						flow->flow_stop.tv_sec,flow->flow_stop.tv_usec,
+						flow->flow_id, flow->flow_start.tv_sec, flow->flow_start.tv_nsec,
+						flow->flow_stop.tv_sec, flow->flow_stop.tv_nsec,
 						flow->flow_sport,inet_ntop(AF_INET6, &(dstin->sin6_addr), straddr, sizeof(straddr)),
 						ntohs(dstin->sin6_port),flow->errors, flow->success,
 						flow->sequence_nmbr);
@@ -628,7 +631,7 @@ static int open_sockets(void)
  */
 static int init_rude(void)
 {
-	struct timeval now  = {0,0};
+	struct timespec now = {0,0};
 	unsigned long wait  = 0;
 	int retval          = 0;
 
@@ -653,11 +656,11 @@ static int init_rude(void)
 	}
 
 	/* Check the time when we should start/have started transmission */
-	gettimeofday(&now,NULL);
-	if(timercmp(&tester_start,&now,>)){
-		wait = ((tester_start.tv_sec - now.tv_sec)*1000000) +
-			(tester_start.tv_usec - now.tv_usec);
-		RUDEBUG7("init_rude() - wait for start %lu microseconds...",wait);
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (timespeccmp(&tester_start,&now,>)) {
+		wait = ((tester_start.tv_sec - now.tv_sec)*1000000000) +
+			(tester_start.tv_nsec - now.tv_nsec);
+		RUDEBUG7("init_rude() - wait for start %lu nanoseconds...",wait);
 		usleep(wait);
 		RUDEBUG7("done!\n");
 	}

@@ -54,19 +54,19 @@ struct flow_stat
 	unsigned long rec;          /* Number of received packets */
 	unsigned long oos;          /* Number of packets out of sequence */
 	long long js_sec;           /* Jitter sum of seconds */
-	long long js_usec;          /* Jitter sum of microsseconds */
+	long long js_nsec;          /* Jitter sum of nanoseconds */
 	long long ds_sec;           /* Delay sum of seconds */
-	long long ds_usec;          /* Delay sum of microsseconds */
+	long long ds_nsec;          /* Delay sum of nanoseconds */
 	long last_tx_sec;
-	long last_tx_usec;
+	long last_tx_nsec;
 	long last_rx_sec;
-	long last_rx_usec;
+	long last_rx_nsec;
 	long last_delay_sec;
-	long last_delay_usec;
+	long last_delay_nsec;
 	long first_rx_sec;
-	long first_rx_usec;
+	long first_rx_nsec;
 	long max_jitter_sec;
-	long max_jitter_usec;
+	long max_jitter_nsec;
 	unsigned long long s_size;  /* Sum of all packet sizes */
 };
 
@@ -317,14 +317,14 @@ int main(int argc, char **argv)
 					flows[nflows].seq = ULONG_MAX;
 					flows[nflows].seqmin = ULONG_MAX;
 					flows[nflows].js_sec = 0;
-					flows[nflows].js_usec = 0;
+					flows[nflows].js_nsec = 0;
 					flows[nflows].ds_sec = 0;
-					flows[nflows].ds_usec = 0;
+					flows[nflows].ds_nsec = 0;
 					flows[nflows].s_size = 0;
 					flows[nflows].last_delay_sec = 0;
-					flows[nflows].last_delay_usec = 0;
+					flows[nflows].last_delay_nsec = 0;
 					flows[nflows].max_jitter_sec = 0;
-					flows[nflows].max_jitter_usec = 0;
+					flows[nflows].max_jitter_nsec = 0;
 					/* The other fields are initialized when the first packet arrives */
 					nflows++;
 				}
@@ -623,9 +623,9 @@ static int decode_file(void)
 		       str1, ntohs(((struct sockaddr_in *)&s_add)->sin_port),
 		       str2, ntohs(ptr2->dest_port),
 		       (unsigned long)ntohl(ptr1->tx_time_seconds),
-		       (unsigned long)ntohl(ptr1->tx_time_useconds),
+		       (unsigned long)ntohl(ptr1->tx_time_nsec),
 		       (unsigned long)ntohl(ptr2->rx_time_seconds),
-		       (unsigned long)ntohl(ptr2->rx_time_useconds),
+		       (unsigned long)ntohl(ptr2->rx_time_nsec),
 		       (long)ntohl(ptr2->pkt_size));
 	}
 
@@ -646,19 +646,19 @@ static int runtime_stats(unsigned short port, unsigned long limit)
 	int                wri_bytes = 0;     /* Bytes written         */
 	int                src_len = sizeof(struct sockaddr_in6);
 	struct sockaddr_in6 src_addr;
-	struct timeval     time1;
+	struct timespec    time1;
 	char buffer[PMAXSIZE];
 	struct udp_data *data = (struct udp_data *) buffer;
 	int i;
 	struct flow_stat *fsp;
 	unsigned long seq;
 	long tx_s;
-	long tx_us;
+	long tx_ns;
 	unsigned long flowid;
 	long delay_s;
-	long delay_us;
+	long delay_ns;
 	long jitter_s;
-	long jitter_us;
+	long jitter_ns;
 
 	/* Initialize some variables */
 	memset(buffer,0,PMAXSIZE);
@@ -673,7 +673,7 @@ static int runtime_stats(unsigned short port, unsigned long limit)
 		}
 		else
 		{
-			gettimeofday(&time1, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &time1);
 			flowid = ntohl(data->flow_id);
 			for (i = 0; i < nflows; i++)
 			{
@@ -692,9 +692,9 @@ static int runtime_stats(unsigned short port, unsigned long limit)
 			seq = ntohl(data->sequence_number);
 			fsp->rec++;
 			tx_s = ntohl(data->tx_time_seconds);
-			tx_us = ntohl(data->tx_time_useconds);
+			tx_ns = ntohl(data->tx_time_nsec);
 			delay_s = time1.tv_sec - tx_s;
-			delay_us = time1.tv_usec - tx_us;
+			delay_ns = time1.tv_nsec - tx_ns;
 			if (seq <= fsp->seq)
 			{
 				fsp->oos++;
@@ -711,7 +711,7 @@ static int runtime_stats(unsigned short port, unsigned long limit)
 						 * number is always less than that.  :-)  */
 						fsp->oos--; /* The first packet obviously isn't out of sequence */
 						fsp->first_rx_sec = time1.tv_sec;
-						fsp->first_rx_usec = time1.tv_usec;
+						fsp->first_rx_nsec = time1.tv_nsec;
 						fsp->seq = seq;
 						goto update_last;
 					}
@@ -722,43 +722,43 @@ static int runtime_stats(unsigned short port, unsigned long limit)
 				fsp->seq = seq;
 			}
 			fsp->ds_sec += delay_s;
-			fsp->ds_usec += delay_us;
+			fsp->ds_nsec += delay_ns;
 			jitter_s = delay_s - fsp->last_delay_sec;
-			jitter_us = delay_us - fsp->last_delay_usec;
+			jitter_ns = delay_ns - fsp->last_delay_nsec;
 			/* We need the absolute value, so: */
 			if (jitter_s < 0)
 			{
 				jitter_s = -jitter_s;
-				jitter_us = -jitter_us;
+				jitter_ns = -jitter_ns;
 			}  /* At this point, jitter_s >= 0 */
-			if (jitter_us < 0)
+			if (jitter_ns < 0)
 			{
 				if (jitter_s == 0)
 				{
-					jitter_us = -jitter_us;
+					jitter_ns = -jitter_ns;
 				}
 				else
 				{
-					jitter_us += 1000000;
+					jitter_ns += 1000000000;
 					jitter_s--;
 				}
 			}  /* Now both jitter components are positive */
 			fsp->js_sec += jitter_s;
-			fsp->js_usec += jitter_us;
+			fsp->js_nsec += jitter_ns;
 			if ((jitter_s > fsp->max_jitter_sec)
 			    || ((jitter_s == fsp->max_jitter_sec)
-			    && (jitter_us > fsp->max_jitter_usec)))
+			    && (jitter_ns > fsp->max_jitter_nsec)))
 			{
 				fsp->max_jitter_sec = jitter_s;
-				fsp->max_jitter_usec = jitter_us;
+				fsp->max_jitter_nsec = jitter_ns;
 			}
 		update_last:
 			fsp->last_tx_sec = tx_s;
-			fsp->last_tx_usec = tx_us;
+			fsp->last_tx_nsec = tx_ns;
 			fsp->last_rx_sec = time1.tv_sec;
-			fsp->last_rx_usec = time1.tv_usec;
+			fsp->last_rx_nsec = time1.tv_nsec;
 			fsp->last_delay_sec = delay_s;
-			fsp->last_delay_usec = delay_us;
+			fsp->last_delay_nsec = delay_ns;
 			fsp->s_size += rec_bytes;
 		}
 
@@ -781,7 +781,7 @@ void print_stats(void)
 {
 	int i;
 	struct flow_stat *fsp;
-	long long sec, usec;
+	long long sec, nsec;
 	double interval;
 
 	printf("\n"
@@ -806,52 +806,52 @@ void print_stats(void)
 			continue;
 		}
 		sec = fsp->ds_sec / fsp->rec;
-		usec = (fsp->ds_usec + 1000000 * (fsp->ds_sec % fsp->rec)) / fsp->rec;
-		sec += usec / 1000000;
-		usec %= 1000000;
+		nsec = (fsp->ds_nsec + 1000000000 * (fsp->ds_sec % fsp->rec)) / fsp->rec;
+		sec += nsec / 1000000000;
+		nsec %= 1000000000;
 
 		// printf( "Raw data:       sec = %lld    usec = %lld\n", sec, usec );
 
 		/* Possible with dessynchronized clocks */
-		/* sec and usec must have same sign for output */
-		if ( (sec > 0 ) && (usec < 0) )
+		/* sec and nsec must have same sign for output */
+		if ( (sec > 0 ) && (nsec < 0) )
 		{
 			sec--;
-			usec = 1000000 + usec;
+			nsec = 1000000000 + nsec;
 		}
-		else if ( (sec < 0 ) && (usec > 0) )
+		else if ( (sec < 0 ) && (nsec > 0) )
 		{
 			sec++;
-			usec = -1000000 + usec;
+			nsec = -1000000000 + nsec;
 		}
 
 		// printf( "Corrected data: sec = %lld    usec = %lld\n", sec, usec );
 
 		/* print average delay as sign and absolute value */
-		if ( (sec < 0) || (usec < 0) )
+		if ( (sec < 0) || (nsec < 0) )
 		{
 			sec  = llabs( sec );
-			usec = llabs( usec );
-			printf("Delay: average = -%lld.%06llu   ", sec, usec);
+			nsec = llabs( nsec );
+			printf("Delay: average = -%lld.%06llu   ", sec, nsec);
 		}
 		else
 		{
-			printf("Delay: average = %lld.%06llu   ", sec, usec);
+			printf("Delay: average = %lld.%06llu   ", sec, nsec);
 		}
 
 		/* Both components of all jitter values are positive, thus the sum of
 		 * them is also positive */
 		sec = fsp->js_sec / (fsp->rec - 1);
-		usec = (fsp->js_usec + 1000000 * (fsp->js_sec % (fsp->rec - 1))) /
+		nsec = (fsp->js_nsec + 1000000000 * (fsp->js_sec % (fsp->rec - 1))) /
 		       (fsp->rec - 1);
-		sec += usec / 1000000;
-		usec %= 1000000;
-		printf("jitter=%llu.%06llu   seconds \n", sec, usec);
+		sec += nsec / 1000000000;
+		nsec %= 1000000000;
+		printf("jitter=%llu.%06llu   seconds \n", sec, nsec);
 		printf("Absolute maximum jitter=%ld.%06ld   seconds \n",
-		       fsp->max_jitter_sec, fsp->max_jitter_usec);
+		       fsp->max_jitter_sec, fsp->max_jitter_nsec);
 		sec = (long) fsp->last_rx_sec - (long) fsp->first_rx_sec;
-		usec = (long) fsp->last_rx_usec - (long) fsp->first_rx_usec;
-		interval = (double) sec + (double) usec / 1000000.0;
+		nsec = (long) fsp->last_rx_nsec - (long) fsp->first_rx_nsec;
+		interval = (double) sec + (double) nsec / 1000000000.0;
 		printf("Throughput=%g   Bps  (from first to last packet received) \n",
 		       (double) fsp->s_size / interval);
 	}
@@ -868,7 +868,7 @@ static int rec_to_file(unsigned short port, unsigned long limit)
 	int                wri_bytes = 0;     /* Bytes written         */
 	int                src_len = sizeof(struct sockaddr_storage);
 	struct sockaddr_storage src_addr;
-	struct timeval     time1;
+	struct timespec    time1;
 	struct crude_struct  other_info;
 	char buffer[PMAXSIZE];
 
@@ -886,10 +886,10 @@ static int rec_to_file(unsigned short port, unsigned long limit)
 		}
 		else
 		{
-			gettimeofday(&time1, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &time1);
 			pkt_count++;
 			other_info.rx_time_seconds  = htonl(time1.tv_sec);
-			other_info.rx_time_useconds = htonl(time1.tv_usec);
+			other_info.rx_time_nsec     = htonl(time1.tv_nsec);
 			other_info.pkt_size         = htonl(rec_bytes);
 			//other_info.src_port         = ((struct sockaddr_in6 *)&src_addr)->sin6_port;
 			//other_info.src_addr         = ((struct sockaddr_in6 *)&src_addr)->sin6_addr;
@@ -942,7 +942,7 @@ static int rec_n_print(unsigned short port, unsigned long limit)
 	long               rec_bytes = 0;     /* Bytes read            */
 	int                src_len   = sizeof(struct sockaddr_storage);
 	struct sockaddr_storage src_addr;
-	struct timeval     time1;
+	struct timespec    time1;
 	struct udp_data    *udp_ptr;
 	struct sockaddr_storage  d_add;
 	char buffer[PMAXSIZE], str1[INET6_ADDRSTRLEN], str2[INET6_ADDRSTRLEN];
@@ -963,7 +963,7 @@ static int rec_n_print(unsigned short port, unsigned long limit)
 		}
 		else
 		{
-			gettimeofday(&time1, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &time1);
 			pkt_count++;
 			udp_ptr = (struct udp_data*)buffer;
 			d_add = udp_ptr->dest_addr;
@@ -977,8 +977,8 @@ static int rec_n_print(unsigned short port, unsigned long limit)
 			       (unsigned long)ntohl(udp_ptr->sequence_number),
 			       str1, ntohs(((struct sockaddr_in *)&src_addr)->sin_port), str2, port,
 			       (unsigned long)ntohl(udp_ptr->tx_time_seconds),
-			       (unsigned long)ntohl(udp_ptr->tx_time_useconds),
-			       time1.tv_sec, time1.tv_usec, rec_bytes);
+			       (unsigned long)ntohl(udp_ptr->tx_time_nsec),
+			       time1.tv_sec, time1.tv_nsec, rec_bytes);
 			fflush(stdout);
 		}
 

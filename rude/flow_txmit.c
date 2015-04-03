@@ -21,6 +21,8 @@
  *                 Sampo Saaristo <sambo@cc.tut.fi>
  *
  *****************************************************************************/
+#define _POSIX_C_SOURCE 200809L
+
 #include <config.h>
 #include <rude.h>
 
@@ -32,40 +34,43 @@
 #include <sched.h>
 #include <time.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "timespec_ops.h"
 
 /* Introduce our global variables */
 extern struct flow_cfg *head;
 extern struct udp_data *data;
 extern char            *buffer;
 
-struct timespec pre_nano_sleep = {0,10005};//10us+5nanos...see man nanosleep
 /*
  * wait_for_xmit(): Wait for certain period of time in busy-loop
  */
-__inline__ void wait_for_xmit(struct timeval *target, struct timeval *now)
+void wait_for_xmit(struct timespec *target, struct timespec *now)
 {
-		//try wait with nanosleep, then active loop
-	gettimeofday(now,NULL);
-		if(timercmp(now,target,<)){
-		//nanosleep has a resolution 10ms on i386 architectures
-		struct timespec now_spec = {now->tv_sec,now->tv_usec*1000};
-		struct timespec target_spec = {target->tv_sec,target->tv_usec*1000};
+	// short-sleep with nanosleep, then busy-wait
+	clock_gettime(CLOCK_MONOTONIC, now);
+	if (timespeccmp(now, target, <)){
+		struct timespec target_spec = {
+			target->tv_sec,
+			target->tv_nsec * 1000000
+		};
 		struct timespec diff;
-		timespecsub(&target_spec,&now_spec,&diff);    //dif = now-target - pre_nano_sleep
-		timespecsub(&diff, &pre_nano_sleep, &diff);
-		if(diff.tv_sec >= 0 && diff.tv_nsec >= 0)
-			nanosleep(&diff, NULL);
+		// 10us + 5ns...see man nanosleep
+		struct timespec pre_nano_sleep = {0,10005};
+
+		timespecsub(now, &pre_nano_sleep, &diff);
+		if (diff.tv_sec >= 0 && diff.tv_nsec >= 0) {
+			clock_nanosleep(CLOCK_MONOTONIC,
+			                TIMER_ABSTIME, &diff, NULL);
+		}
 	}
 	while(1){
-		gettimeofday(now,NULL);
-		if(timercmp(now,target,<)){
-			/* FIXME: check if the timegap is large => use [u | nano]sleep() */
+		clock_gettime(CLOCK_MONOTONIC, now);
+		if (timespeccmp(now, target, <)){
 			continue;
 		}
 		return;
@@ -82,7 +87,7 @@ __inline__ void wait_for_xmit(struct timeval *target, struct timeval *now)
 void send_cbr(struct flow_cfg *flow)
 {
 	struct cbr_params *p = &flow->params.cbr;
-	struct timeval now   = {0,0};
+	struct timespec now  = {0,0};
 	int written          = 0;
 	int i = 0;
 
@@ -95,7 +100,7 @@ void send_cbr(struct flow_cfg *flow)
 
 	/* ...and fill in the rest of the data */
 	data->tx_time_seconds  = htonl(now.tv_sec);
-	data->tx_time_useconds = htonl(now.tv_usec);
+	data->tx_time_nsec = htonl(now.tv_nsec);
 
 	/* Write the data to the socket and check the result for errors */
 	/* Increase the status and sequence number counters.            */
@@ -104,10 +109,10 @@ void send_cbr(struct flow_cfg *flow)
 		//pokud budu posilat jeste dalsi v baliku tak bych mohl zvysit sequence number
 		if( i > 0){
 			data->sequence_number = htonl( ++(flow->sequence_nmbr) );
-			gettimeofday(&now,NULL);
+			clock_gettime(CLOCK_MONOTONIC, &now);
 			/* ...and fill in the actual times */
 			data->tx_time_seconds  = htonl(now.tv_sec);
-			data->tx_time_useconds = htonl(now.tv_usec);
+			data->tx_time_nsec = htonl(now.tv_nsec);
 
 		}
 
@@ -125,9 +130,9 @@ void send_cbr(struct flow_cfg *flow)
 
 	/* Caclulate and store the next transmission time */
 	/* Calculate with time_period						*/
-	flow->next_tx.tv_usec += (1000000.0 * p->time_period)/p->rate;
-	while(flow->next_tx.tv_usec >= 1000000){
-		flow->next_tx.tv_usec -= 1000000;
+	flow->next_tx.tv_nsec += (1000000000.0 * p->time_period)/p->rate;
+	while(flow->next_tx.tv_nsec >= 1000000000){
+		flow->next_tx.tv_nsec -= 1000000000;
 		flow->next_tx.tv_sec  += 1;
 	}
 
@@ -142,7 +147,7 @@ void send_trace(struct flow_cfg *flow)
 {
 	struct trace_params *p = &flow->params.trace;
 	int xmit_size          = p->list[p->list_index].psize;
-	struct timeval now     = {0,0};
+	struct timespec now    = {0,0};
 	int written            = 0;
 
 	/* Do the initialization and wait if necessary... */
@@ -153,7 +158,7 @@ void send_trace(struct flow_cfg *flow)
 
 	/* ...and fill in the rest of the data */
 	data->tx_time_seconds  = htonl(now.tv_sec);
-	data->tx_time_useconds = htonl(now.tv_usec);
+	data->tx_time_nsec     = htonl(now.tv_nsec);
 
 	/* Write the data to the socket and check the result for errors */
 	/* Increase the status and sequence number counters.            */
@@ -170,7 +175,7 @@ void send_trace(struct flow_cfg *flow)
 
 	/* Caclulate the next transmission time & other stuff */
 	now = flow->next_tx;
-	timeradd(&now,&p->list[p->list_index].wait,&flow->next_tx);
+	timespecadd(&now, &p->list[p->list_index].wait, &flow->next_tx);
 	p->list_index++;
 	p->list_index %= p->list_size;
 
