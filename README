@@ -39,6 +39,8 @@ INTRODUCTION (very short):
 COMPILATION AND INSTALLATION INSTRUCTIONS:
 ------------------------------------------
 
+ 0. This code assumes glibc >= 2.19
+
  1. Before you can compile the program you should make the configuration
      script(s) and other files with the GNU autotools.
     The `autoconf` and `automake` packages are required.
