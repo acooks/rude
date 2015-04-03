@@ -21,7 +21,7 @@
  *                 Sampo Saaristo <sambo@cc.tut.fi>
  *
  *****************************************************************************/
-#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE 1
 
 #include <config.h>
 #include <rude.h>

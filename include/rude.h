@@ -52,11 +52,11 @@ typedef enum {
  * Private struct for CONSTANT BIT RATE traffic
  */
 struct cbr_params{
-  f_type ftype;                        /* Flow TRAFFIC TYPE              */
-  int    rate;                         /* Flow PACKET RATE - PACKAGE RATE per PERIOD */
-  int    psize;                        /* Flow PACKET SIZE               */
-  int 	 package_size;				   /* Flow NUMBER OF PACKETS IN ONE PACKAGE*/
-  int    time_period;					   /* Flow TIME_PERIOD */		
+  f_type ftype;          /* Flow TRAFFIC TYPE                          */
+  int    rate;           /* Flow PACKET RATE - PACKAGE RATE per PERIOD */
+  int    psize;          /* Flow PACKET SIZE                           */
+  int    package_size;   /* Flow NUMBER OF PACKETS IN ONE PACKAGE      */
+  int    time_period;    /* Flow TIME_PERIOD                           */
 };
 
 /*
@@ -82,25 +82,24 @@ struct trace_params{
 struct flow_cfg {
   struct flow_cfg     *next;            /* Pointer to NEXT flow           */
   struct flow_cfg     *mod_flow;        /* Next action-block for the flow */
-  struct sockaddr_storage dst;              /* Destination information        */
-  int                 send_sock;	       /* Socket to be used by this flow */
+  struct sockaddr_storage dst;          /* Destination information        */
+  int                 send_sock;        /* Socket to be used by this flow */
 
-	
   uint32_t            flow_id;          /* Flow IDENTIFICATION number     */
   uint16_t            flow_sport;       /* Flow SOURCE PORT number        */
   struct timespec     flow_start;       /* Absolute flow cmd START TIME   */
   struct timespec     flow_stop;        /* Absolute flow cmd END TIME     */
   struct timespec     next_tx;          /* Absolute next packet TX TIME   */
 
-  void (*send_func)(struct flow_cfg*); /* TX function for this flow */
+  void (*send_func)(struct flow_cfg*);  /* TX function for this flow */
 
-  int errors;                          /*                   */
-  int success;                         /* Internal counters */
-  int sequence_nmbr;                   /*                   */
+  int errors;                           /*                   */
+  int success;                          /* Internal counters */
+  int sequence_nmbr;                    /*                   */
 
-  int tos;                             /* IP TOS byte if positive */
-  char 				*localIf;			/* local interface to be used with multicast */	
-  char prefferedVersion; 				/*preffered ip version(4 or 6)*/
+  int tos;                              /* IP TOS byte if positive */
+  char *localIf;                        /* local interface to be used with multicast */
+  char prefferedVersion;                /* preffered ip version(4 or 6) */
   union {
     f_type              ftype;
     struct cbr_params   cbr;
@@ -112,7 +111,7 @@ struct flow_cfg {
 /*
  * Wrapper structure that helps filling the "header" to the buffer
  */
-struct udp_data{
+struct udp_data {
   uint32_t sequence_number;
   uint32_t tx_time_seconds;
   uint32_t tx_time_nsec;
@@ -129,12 +128,12 @@ struct crude_struct{
   uint32_t  rx_time_nsec;
   //struct in6_addr  src_addr;
   uint32_t           pkt_size;
-  struct sockaddr_storage src; 
+  struct sockaddr_storage src;
 	//unsigned short src_port;
   uint16_t dest_port;
 };
 
- 
+
 /*
  * Debug print macros - neat isn't it :)
  */

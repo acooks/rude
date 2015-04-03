@@ -21,7 +21,7 @@
  *                 Sampo Saaristo <sambo@cc.tut.fi>
  *
  *****************************************************************************/
-#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE 1
 
 #include <config.h>
 #include <rude.h>
@@ -51,7 +51,7 @@ extern char            *buffer;
  */
 void wait_for_xmit(struct timespec *target, struct timespec *now)
 {
-	// short-sleep with nanosleep, then busy-wait
+	//try wait with nanosleep, then active loop
 	clock_gettime(CLOCK_MONOTONIC, now);
 	if (timespeccmp(now, target, <)){
 		struct timespec target_spec = {
@@ -76,7 +76,6 @@ void wait_for_xmit(struct timespec *target, struct timespec *now)
 		return;
 	};
 
-	/* Next line is for compiler :) */
 	return;
 } /* wait_for_xmit() */
 
