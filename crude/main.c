@@ -852,8 +852,10 @@ void print_stats(void)
 		sec = (long) fsp->last_rx_sec - (long) fsp->first_rx_sec;
 		nsec = (long) fsp->last_rx_nsec - (long) fsp->first_rx_nsec;
 		interval = (double) sec + (double) nsec / 1000000000.0;
-		printf("Throughput=%g   Bps  (from first to last packet received) \n",
-		       (double) fsp->s_size / interval);
+		printf("Throughput (from first to last packet received): \n"
+		       "%g   Bps, %g PPS\n",
+		       (double) fsp->s_size / interval,
+		       (double) fsp->rec / interval);
 	}
 	printf("\n");
 }
